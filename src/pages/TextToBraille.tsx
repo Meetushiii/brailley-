@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import BrailleCell from '@/components/BrailleCell';
 import { textToBraille, textToBrailleDots } from '@/utils/brailleUtils';
 import { useAudioContext } from '@/context/AudioContext';
-import { Copy, VolumeUp } from 'lucide-react';
+import { Copy, Volume2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const TextToBraille = () => {
@@ -75,7 +75,7 @@ const TextToBraille = () => {
             
             <div className="flex space-x-2">
               <Button onClick={speakText} disabled={!inputText} className="flex items-center space-x-1">
-                <VolumeUp size={18} />
+                <Volume2 size={18} />
                 <span>Speak</span>
               </Button>
               <Button onClick={handleCopy} disabled={!brailleText} variant="outline" className="flex items-center space-x-1">

@@ -7,6 +7,7 @@ import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import BrailleCell from '@/components/BrailleCell';
 import { useAudioContext } from '@/context/AudioContext';
 import { useToast } from '@/hooks/use-toast';

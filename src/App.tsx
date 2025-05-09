@@ -8,6 +8,13 @@ import Index from "./pages/Index";
 import TextToBraille from "./pages/TextToBraille";
 import VoiceToBraille from "./pages/VoiceToBraille";
 import MathLearning from "./pages/MathLearning";
+import CollaborativeBrailleEditor from "./pages/CollaborativeBrailleEditor";
+import BrailleTutor from "./pages/BrailleTutor";
+import TactileMapGenerator from "./pages/TactileMapGenerator";
+import PeerMentorship from "./pages/PeerMentorship";
+import BrailleArt from "./pages/BrailleArt";
+import Register from "./pages/Register";
+import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
@@ -28,6 +35,13 @@ const App = () => (
                 <Route path="/text-to-braille" element={<TextToBraille />} />
                 <Route path="/voice-to-braille" element={<VoiceToBraille />} />
                 <Route path="/math-learning" element={<MathLearning />} />
+                <Route path="/collaborative-editor" element={<CollaborativeBrailleEditor />} />
+                <Route path="/braille-tutor" element={<BrailleTutor />} />
+                <Route path="/tactile-map" element={<TactileMapGenerator />} />
+                <Route path="/peer-mentorship" element={<PeerMentorship />} />
+                <Route path="/braille-art" element={<BrailleArt />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/login" element={<Login />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </main>

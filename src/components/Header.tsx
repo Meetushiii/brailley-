@@ -12,7 +12,7 @@ const Header: React.FC = () => {
     <header className="bg-braille-blue text-white p-4 shadow-md">
       <div className="container mx-auto flex justify-between items-center">
         <Link to="/" className="flex items-center space-x-2">
-          <h1 className="text-2xl font-bold">BrailleMathVerse</h1>
+          <h1 className="text-2xl font-bold">Braillely</h1>
         </Link>
         
         <nav className="flex space-x-2">

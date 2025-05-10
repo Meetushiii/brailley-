@@ -39,9 +39,9 @@ const Login = () => {
     playSound('success');
     toast({
       title: "Login successful!",
-      description: "Welcome back to BrailleMathVerse.",
+      description: "Welcome back to Braillely.",
     });
-    speak("Login successful. Welcome back to Braille Math Verse.");
+    speak("Login successful. Welcome back to Braillely.");
     navigate('/');
   };
 
@@ -55,7 +55,7 @@ const Login = () => {
             Welcome Back
           </CardTitle>
           <CardDescription className="text-center text-gray-600">
-            Sign in to continue to BrailleMathVerse
+            Sign in to continue to Braillely
           </CardDescription>
         </CardHeader>
         

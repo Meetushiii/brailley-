@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { useAudioContext } from '@/context/AudioContext';
-import { Eye, EyeOff, LogIn } from 'lucide-react';
+import { Eye, EyeOff, LogIn, Mail, Lock } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -46,25 +46,38 @@ const Login = () => {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold text-braille-blue mb-6">Log In to BrailleMathVerse</h1>
-      
-      <Card className="max-w-md mx-auto">
-        <CardHeader>
-          <CardTitle>Login</CardTitle>
-          <CardDescription>Welcome back to BrailleMathVerse</CardDescription>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-cyan-50 to-teal-100 p-4">
+      <Card className="w-full max-w-md overflow-hidden border-none shadow-xl">
+        <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-teal-400 to-cyan-400" />
+        
+        <CardHeader className="space-y-1 bg-white pb-4">
+          <CardTitle className="text-2xl font-bold text-center text-gray-800 font-sans">
+            Welcome Back
+          </CardTitle>
+          <CardDescription className="text-center text-gray-600">
+            Sign in to continue to BrailleMathVerse
+          </CardDescription>
         </CardHeader>
-        <CardContent>
+        
+        <CardContent className="bg-white pt-2">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
               <FormField
                 control={form.control}
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email</FormLabel>
+                    <FormLabel className="text-gray-700 font-medium">Email</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="Enter your email" {...field} />
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                        <Input 
+                          type="email" 
+                          placeholder="Enter your email" 
+                          {...field} 
+                          className="border-gray-300 focus:border-teal-500 focus:ring-teal-500 pl-10"
+                        />
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -76,13 +89,15 @@ const Login = () => {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Password</FormLabel>
+                    <FormLabel className="text-gray-700 font-medium">Password</FormLabel>
                     <FormControl>
                       <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                         <Input 
                           type={showPassword ? 'text' : 'password'} 
                           placeholder="Enter your password" 
                           {...field} 
+                          className="border-gray-300 focus:border-teal-500 focus:ring-teal-500 pl-10"
                         />
                         <Button
                           type="button"
@@ -103,24 +118,27 @@ const Login = () => {
               <div className="flex justify-end">
                 <Button 
                   variant="link" 
-                  className="p-0 h-auto" 
+                  className="p-0 h-auto text-teal-600 hover:text-teal-800" 
                   onClick={() => navigate('/forgot-password')}
                 >
                   Forgot password?
                 </Button>
               </div>
               
-              <div className="flex flex-col space-y-4">
-                <Button type="submit" className="w-full">
+              <div className="pt-2 space-y-4">
+                <Button 
+                  type="submit" 
+                  className="w-full bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 transition-all duration-300"
+                >
                   <LogIn size={16} className="mr-2" />
-                  Log in
+                  Sign in
                 </Button>
                 
-                <div className="text-center text-sm">
+                <div className="text-center text-sm text-gray-600">
                   Don't have an account?{" "}
                   <Button 
                     variant="link" 
-                    className="p-0 h-auto" 
+                    className="p-0 h-auto text-teal-600 hover:text-teal-800 font-medium" 
                     onClick={() => navigate('/register')}
                   >
                     Register

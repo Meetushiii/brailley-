@@ -20,6 +20,7 @@ import NotFound from "./pages/NotFound";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import { AudioProvider } from "./context/AudioContext";
+import ForgotPassword from "./pages/ForgotPassword";
 
 // Create an auth context to replace the window.mockAuth approach
 interface AuthContextType {
@@ -97,6 +98,7 @@ const AppRoutes = () => {
         <Routes>
           <Route path="/login" element={isAuthenticated ? <Navigate to="/" /> : <Login />} />
           <Route path="/register" element={isAuthenticated ? <Navigate to="/" /> : <Register />} />
+          <Route path="/forgot-password" element={isAuthenticated ? <Navigate to="/" /> : <ForgotPassword />} />
           
           {/* Protected routes */}
           <Route path="/" element={isAuthenticated ? <Index /> : <Navigate to="/login" />} />

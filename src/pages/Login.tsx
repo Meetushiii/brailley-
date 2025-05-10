@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { useAudioContext } from '@/context/AudioContext';
+import { useAuth } from '@/App';
 import { Eye, EyeOff, LogIn, Mail, Lock } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -24,6 +25,7 @@ const Login = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { speak, playSound } = useAudioContext();
+  const { login } = useAuth();
   
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -36,13 +38,30 @@ const Login = () => {
   const onSubmit = (data: FormValues) => {
     // In a real app, you would handle login with backend
     console.log('Login data:', data);
-    playSound('success');
-    toast({
-      title: "Login successful!",
-      description: "Welcome back to Braillely.",
-    });
-    speak("Login successful. Welcome back to Braillely.");
-    navigate('/');
+    
+    try {
+      // Call the login function from the auth context to update authentication state
+      login();
+      
+      // Play success sound and show toast notification
+      playSound('success');
+      toast({
+        title: "Login successful!",
+        description: "Welcome back to Braillely.",
+      });
+      
+      speak("Login successful. Welcome back to Braillely.");
+      
+      // Navigate to the home page after successful login
+      navigate('/');
+    } catch (error) {
+      console.error('Login error:', error);
+      toast({
+        title: "Login failed",
+        description: "Please check your credentials and try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   return (

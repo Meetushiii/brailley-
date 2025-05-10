@@ -72,15 +72,15 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <TooltipProvider>
-          <AudioProvider>
-            <BrowserRouter>
+        <BrowserRouter>
+          <TooltipProvider>
+            <AudioProvider>
               <AppRoutes />
-            </BrowserRouter>
-            <Toaster />
-            <Sonner />
-          </AudioProvider>
-        </TooltipProvider>
+              <Toaster />
+              <Sonner />
+            </AudioProvider>
+          </TooltipProvider>
+        </BrowserRouter>
       </AuthProvider>
     </QueryClientProvider>
   );

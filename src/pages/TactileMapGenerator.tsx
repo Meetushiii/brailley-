@@ -42,12 +42,13 @@ const mapOptions = {
   ]
 };
 
-const libraries: ("places" | "drawing" | "geometry" | "localContext" | "visualization")[] = ["places"];
+// Fix the libraries type definition
+const libraries: ["places", "geometry"] = ["places", "geometry"];
 
 const TactileMapGenerator = () => {
   // Google Maps API loader
   const { isLoaded, loadError } = useJsApiLoader({
-    googleMapsApiKey: "YOUR_API_KEY_HERE", // In production, use environment variables or user input
+    googleMapsApiKey: "AIzaSyBubaEt-Fr_KuVLHlmur6ru16GUNLJmE-0", // This is a development key
     libraries,
   });
 
@@ -64,13 +65,14 @@ const TactileMapGenerator = () => {
   const [landmarks, setLandmarks] = useState<{id: number, name: string, type: string, position: {lat: number, lng: number}}[]>([]);
   const [mapKey, setMapKey] = useState(Date.now());
 
-  const mapRef = useRef<GoogleMap | null>(null);
+  // Fix the map reference type
+  const mapRef = useRef<google.maps.Map | null>(null);
   const { speak, playSound } = useAudioContext();
   const { toast } = useToast();
 
   // Save map instance reference  
   const onMapLoad = useCallback((map: google.maps.Map) => {
-    mapRef.current = map as any;
+    mapRef.current = map;
   }, []);
 
   // Geocode the address and center the map

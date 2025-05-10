@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -8,103 +8,101 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAudioContext } from '@/context/AudioContext';
 import { useToast } from '@/hooks/use-toast';
-import { Users, MessageSquare, Search, Book, Lightbulb, Calendar, ArrowRight } from 'lucide-react';
-
-// Mock user data for the peer network
-const mentors = [
-  { 
-    id: 1, 
-    name: 'Sarah Johnson', 
-    expertise: ['Braille Reading', 'Screen Readers', 'Math'],
-    bio: 'Teaching assistant with 5 years experience in adaptive technologies.',
-    available: true 
-  },
-  { 
-    id: 2, 
-    name: 'Michael Chen', 
-    expertise: ['Computer Science', 'Music', 'Accessibility'],
-    bio: 'Software engineer specializing in accessible application design.',
-    available: true 
-  },
-  { 
-    id: 3, 
-    name: 'Aisha Patel', 
-    expertise: ['Literature', 'Writing', 'Foreign Languages'],
-    bio: 'Graduate student in linguistics with a passion for teaching.',
-    available: false 
-  },
-  { 
-    id: 4, 
-    name: 'James Wilson', 
-    expertise: ['Science', 'Chemistry', 'Lab Techniques'],
-    bio: 'Science teacher with extensive experience in adaptive lab equipment.',
-    available: true 
-  },
-];
-
-// Mock skills data
-const skillCategories = [
-  {
-    name: 'Academic',
-    skills: ['Math', 'Science', 'Literature', 'History', 'Languages']
-  },
-  {
-    name: 'Technology',
-    skills: ['Screen Readers', 'Braille Displays', 'Adaptive Software', 'Mobile Accessibility']
-  },
-  {
-    name: 'Life Skills',
-    skills: ['Navigation', 'Cooking', 'Organization', 'Time Management']
-  },
-  {
-    name: 'Arts',
-    skills: ['Music', 'Creative Writing', 'Tactile Art', 'Performance']
-  }
-];
-
-// Mock events data
-const events = [
-  {
-    id: 1,
-    title: 'Intro to Nemeth Braille Code',
-    date: '2025-05-15T14:00:00',
-    host: 'Sarah Johnson',
-    participants: 12,
-    category: 'Academic'
-  },
-  {
-    id: 2,
-    title: 'Screen Reader Tips & Tricks',
-    date: '2025-05-20T16:00:00',
-    host: 'Michael Chen',
-    participants: 8,
-    category: 'Technology'
-  },
-  {
-    id: 3,
-    title: 'Study Group: English Literature',
-    date: '2025-05-18T15:30:00',
-    host: 'Aisha Patel',
-    participants: 5,
-    category: 'Academic'
-  }
-];
+import { 
+  Users, MessageSquare, Search, Book, Lightbulb, Calendar, ArrowRight, 
+  Loader2, Share, UserCheck, Info, Phone
+} from 'lucide-react';
+import { useMentorshipService, Mentor, SkillCategory, MentorshipEvent } from '../services/mentorshipService';
+import { useQuery } from '@tanstack/react-query';
 
 const PeerMentorship = () => {
+  // State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [userName, setUserName] = useState('Guest User');
+  const [userSkills, setUserSkills] = useState<string[]>([]);
+  const [userGoals, setUserGoals] = useState<string[]>([]);
+  
+  // Hooks
   const { speak, playSound } = useAudioContext();
   const { toast } = useToast();
+  const mentorshipService = useMentorshipService();
   
-  const handleContactMentor = (mentor: typeof mentors[0]) => {
-    toast({
-      title: "Request sent!",
-      description: `Your mentorship request was sent to ${mentor.name}.`,
-    });
-    speak(`Your mentorship request was sent to ${mentor.name}.`);
-    playSound('success');
+  // Fetch data using React Query
+  const { data: mentors = [], isLoading: isMentorsLoading } = useQuery({
+    queryKey: ['mentors'],
+    queryFn: () => mentorshipService.getMentors(),
+  });
+  
+  const { data: skillCategories = [], isLoading: isSkillsLoading } = useQuery({
+    queryKey: ['skillCategories'],
+    queryFn: () => mentorshipService.getSkillCategories(),
+  });
+  
+  const { data: events = [], isLoading: isEventsLoading } = useQuery({
+    queryKey: ['events'],
+    queryFn: () => mentorshipService.getEvents(),
+  });
+  
+  // Load user profile from local storage
+  useEffect(() => {
+    const savedProfile = localStorage.getItem('user-profile');
+    if (savedProfile) {
+      try {
+        const profile = JSON.parse(savedProfile);
+        setUserName(profile.name || 'Guest User');
+        setUserSkills(profile.skills || []);
+        setUserGoals(profile.goals || []);
+      } catch (error) {
+        console.error('Error loading profile:', error);
+      }
+    }
+  }, []);
+  
+  // Save profile
+  const saveProfile = async () => {
+    const profileData = {
+      name: userName,
+      skills: userSkills,
+      goals: userGoals
+    };
+    
+    // Save to local storage
+    localStorage.setItem('user-profile', JSON.stringify(profileData));
+    
+    // Update on backend
+    const result = await mentorshipService.updateProfile(profileData);
+    
+    if (result.success) {
+      toast({
+        title: "Profile Updated",
+        description: result.message,
+      });
+      speak("Your profile has been updated successfully.");
+      playSound('success');
+    }
   };
   
+  // Handle contact mentor
+  const handleContactMentor = async (mentor: Mentor) => {
+    const result = await mentorshipService.requestMentorship(mentor.id);
+    
+    toast({
+      title: result.success ? "Request Sent!" : "Request Failed",
+      description: result.message,
+      variant: result.success ? "default" : "destructive",
+    });
+    
+    if (result.success) {
+      speak(`Your mentorship request was sent to ${mentor.name}.`);
+      playSound('success');
+    } else {
+      speak("There was a problem sending your mentorship request.");
+      playSound('error');
+    }
+  };
+  
+  // Handle skill toggle
   const handleSkillToggle = (skill: string) => {
     if (selectedSkills.includes(skill)) {
       setSelectedSkills(selectedSkills.filter(s => s !== skill));
@@ -113,15 +111,26 @@ const PeerMentorship = () => {
     }
   };
   
-  const handleEventRegistration = (event: typeof events[0]) => {
+  // Handle event registration
+  const handleEventRegistration = async (event: MentorshipEvent) => {
+    const result = await mentorshipService.registerForEvent(event.id);
+    
     toast({
-      title: "Registered!",
-      description: `You've registered for "${event.title}"`,
+      title: result.success ? "Registered!" : "Registration Failed",
+      description: result.success ? `You've registered for "${event.title}"` : result.message,
+      variant: result.success ? "default" : "destructive",
     });
-    speak(`You've successfully registered for ${event.title}.`);
-    playSound('success');
+    
+    if (result.success) {
+      speak(`You've successfully registered for ${event.title}.`);
+      playSound('success');
+    } else {
+      speak("There was a problem with your registration.");
+      playSound('error');
+    }
   };
   
+  // Format event date
   const formatEventDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { 
@@ -146,12 +155,37 @@ const PeerMentorship = () => {
     return matchesSearch && matchesSkills;
   });
   
+  // Filter events based on search query
   const filteredEvents = events.filter(event => {
     return searchQuery === '' || 
       event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       event.host.toLowerCase().includes(searchQuery.toLowerCase()) ||
       event.category.toLowerCase().includes(searchQuery.toLowerCase());
   });
+
+  // Add user skill
+  const addUserSkill = (skill: string) => {
+    if (!userSkills.includes(skill)) {
+      setUserSkills([...userSkills, skill]);
+    }
+  };
+
+  // Add user goal
+  const addUserGoal = (goal: string) => {
+    if (!userGoals.includes(goal)) {
+      setUserGoals([...userGoals, goal]);
+    }
+  };
+
+  // Remove user skill
+  const removeUserSkill = (skill: string) => {
+    setUserSkills(userSkills.filter(s => s !== skill));
+  };
+
+  // Remove user goal
+  const removeUserGoal = (goal: string) => {
+    setUserGoals(userGoals.filter(g => g !== goal));
+  };
   
   return (
     <div className="container mx-auto px-4 py-8">
@@ -206,32 +240,54 @@ const PeerMentorship = () => {
         <Card className="flex-1">
           <CardHeader>
             <CardTitle>Your Profile</CardTitle>
+            <CardDescription>Complete your profile to unlock all features</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col items-center space-y-4">
-            <Avatar className="w-24 h-24">
-              <AvatarFallback className="text-2xl">ME</AvatarFallback>
-            </Avatar>
-            <div className="text-center">
-              <h3 className="text-lg font-medium">Guest User</h3>
-              <p className="text-sm text-gray-500">Complete your profile to unlock all features</p>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col items-center space-y-4 mb-4">
+              <Avatar className="w-24 h-24">
+                <AvatarFallback className="text-2xl bg-braille-blue text-white">
+                  {userName.split(' ').map(n => n[0]).join('')}
+                </AvatarFallback>
+              </Avatar>
+              <Input 
+                type="text" 
+                value={userName} 
+                onChange={(e) => setUserName(e.target.value)} 
+                placeholder="Your Name"
+                className="max-w-xs text-center"
+              />
             </div>
             
-            <div className="w-full">
-              <h4 className="font-medium mb-2">My Skills:</h4>
+            <div className="space-y-2">
+              <h4 className="font-medium">My Skills:</h4>
               <div className="flex flex-wrap gap-2">
-                <Badge variant="outline">Add skills...</Badge>
+                {userSkills.map(skill => (
+                  <Badge key={skill} variant="outline" className="cursor-pointer" onClick={() => removeUserSkill(skill)}>
+                    {skill} ✕
+                  </Badge>
+                ))}
+                {userSkills.length === 0 && (
+                  <Badge variant="outline">Add skills...</Badge>
+                )}
               </div>
             </div>
             
-            <div className="w-full">
-              <h4 className="font-medium mb-2">Learning Goals:</h4>
+            <div className="space-y-2">
+              <h4 className="font-medium">Learning Goals:</h4>
               <div className="flex flex-wrap gap-2">
-                <Badge variant="outline">Add goals...</Badge>
+                {userGoals.map(goal => (
+                  <Badge key={goal} variant="outline" className="cursor-pointer" onClick={() => removeUserGoal(goal)}>
+                    {goal} ✕
+                  </Badge>
+                ))}
+                {userGoals.length === 0 && (
+                  <Badge variant="outline">Add goals...</Badge>
+                )}
               </div>
             </div>
           </CardContent>
           <CardFooter>
-            <Button className="w-full">Complete Profile</Button>
+            <Button className="w-full" onClick={saveProfile}>Save Profile</Button>
           </CardFooter>
         </Card>
       </div>
@@ -256,98 +312,154 @@ const PeerMentorship = () => {
         </div>
         
         <TabsContent value="mentors">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {filteredMentors.map(mentor => (
-              <Card key={mentor.id}>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <Avatar>
-                        <AvatarFallback>{mentor.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <CardTitle className="text-lg">{mentor.name}</CardTitle>
-                        <CardDescription>
-                          {mentor.available ? (
-                            <span className="flex items-center">
-                              <span className="w-2 h-2 rounded-full bg-green-500 mr-2" />
-                              Available
-                            </span>
+          {isMentorsLoading ? (
+            <div className="flex justify-center p-8">
+              <Loader2 className="h-8 w-8 animate-spin text-braille-blue" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {filteredMentors.map(mentor => (
+                <Card key={mentor.id}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <Avatar>
+                          {mentor.avatarUrl ? (
+                            <AvatarImage src={mentor.avatarUrl} alt={mentor.name} />
                           ) : (
-                            <span className="flex items-center">
-                              <span className="w-2 h-2 rounded-full bg-gray-400 mr-2" />
-                              Offline
-                            </span>
+                            <AvatarFallback>{mentor.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
                           )}
-                        </CardDescription>
+                        </Avatar>
+                        <div>
+                          <CardTitle className="text-lg">{mentor.name}</CardTitle>
+                          <CardDescription>
+                            {mentor.available ? (
+                              <span className="flex items-center">
+                                <span className="w-2 h-2 rounded-full bg-green-500 mr-2" />
+                                Available
+                              </span>
+                            ) : (
+                              <span className="flex items-center">
+                                <span className="w-2 h-2 rounded-full bg-gray-400 mr-2" />
+                                Offline
+                              </span>
+                            )}
+                          </CardDescription>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm mb-4">{mentor.bio}</p>
-                  <div>
-                    <h4 className="text-sm font-medium mb-2">Expertise:</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {mentor.expertise.map(skill => (
-                        <Badge key={skill} variant="outline">{skill}</Badge>
-                      ))}
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm mb-4">{mentor.bio}</p>
+                    <div>
+                      <h4 className="text-sm font-medium mb-2">Expertise:</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {mentor.expertise.map(skill => (
+                          <Badge 
+                            key={skill} 
+                            variant="outline" 
+                            className="cursor-pointer hover:bg-gray-100"
+                            onClick={() => addUserGoal(skill)}
+                          >
+                            {skill}
+                          </Badge>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-                <CardFooter className="flex justify-between">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="flex items-center"
-                    onClick={() => speak(`${mentor.name} is an expert in ${mentor.expertise.join(', ')}. ${mentor.bio}`)}
-                  >
-                    View Profile
-                  </Button>
-                  <Button 
-                    size="sm"
-                    disabled={!mentor.available}
-                    onClick={() => handleContactMentor(mentor)}
-                  >
-                    Request Mentorship
-                  </Button>
-                </CardFooter>
-              </Card>
-            ))}
-            
-            {filteredMentors.length === 0 && (
-              <div className="col-span-full flex justify-center p-8 bg-gray-50 rounded-lg">
-                <p className="text-gray-500">No mentors found matching your criteria</p>
-              </div>
-            )}
-          </div>
+                  </CardContent>
+                  <CardFooter className="flex justify-between">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex items-center gap-1"
+                      onClick={() => speak(`${mentor.name} is an expert in ${mentor.expertise.join(', ')}. ${mentor.bio}`)}
+                    >
+                      <Info size={16} />
+                      Profile
+                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center gap-1"
+                        disabled={!mentor.available}
+                      >
+                        <Phone size={16} />
+                        Call
+                      </Button>
+                      <Button 
+                        size="sm"
+                        className="flex items-center gap-1"
+                        disabled={!mentor.available}
+                        onClick={() => handleContactMentor(mentor)}
+                      >
+                        <UserCheck size={16} />
+                        Request
+                      </Button>
+                    </div>
+                  </CardFooter>
+                </Card>
+              ))}
+              
+              {filteredMentors.length === 0 && (
+                <div className="col-span-full flex justify-center p-8 bg-gray-50 rounded-lg">
+                  <p className="text-gray-500">No mentors found matching your criteria</p>
+                </div>
+              )}
+            </div>
+          )}
         </TabsContent>
         
         <TabsContent value="skills">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {skillCategories.map(category => (
-              <Card key={category.name}>
-                <CardHeader>
-                  <CardTitle>{category.name}</CardTitle>
-                  <CardDescription>Select skills you want to learn or share</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap gap-2">
-                    {category.skills.map(skill => (
-                      <Badge 
-                        key={skill} 
-                        variant={selectedSkills.includes(skill) ? "default" : "outline"}
-                        className="cursor-pointer hover:bg-gray-100"
-                        onClick={() => handleSkillToggle(skill)}
+          {isSkillsLoading ? (
+            <div className="flex justify-center p-8">
+              <Loader2 className="h-8 w-8 animate-spin text-braille-blue" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {skillCategories.map(category => (
+                <Card key={category.name}>
+                  <CardHeader>
+                    <CardTitle>{category.name}</CardTitle>
+                    <CardDescription>Select skills you want to learn or share</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-2">
+                      {category.skills.map(skill => (
+                        <Badge 
+                          key={skill} 
+                          variant={selectedSkills.includes(skill) ? "default" : "outline"}
+                          className="cursor-pointer hover:bg-gray-100"
+                          onClick={() => handleSkillToggle(skill)}
+                        >
+                          {skill}
+                        </Badge>
+                      ))}
+                    </div>
+                  </CardContent>
+                  <CardFooter>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline"
+                        size="sm"
+                        onClick={() => selectedSkills.forEach(skill => addUserGoal(skill))}
+                        disabled={selectedSkills.length === 0}
                       >
-                        {skill}
-                      </Badge>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                        Add as Goals
+                      </Button>
+                      <Button 
+                        size="sm"
+                        onClick={() => selectedSkills.forEach(skill => addUserSkill(skill))}
+                        disabled={selectedSkills.length === 0}
+                      >
+                        Add as Skills
+                      </Button>
+                    </div>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          )}
           
           <Card className="mt-6">
             <CardHeader>
@@ -373,7 +485,13 @@ const PeerMentorship = () => {
                   <div>
                     <h3 className="font-medium mb-2">Skills I can teach:</h3>
                     <div className="flex flex-wrap gap-2">
-                      <Badge variant="outline">Add skills you can teach...</Badge>
+                      {userSkills.length > 0 ? (
+                        userSkills.map(skill => (
+                          <Badge key={skill} variant="outline">{skill}</Badge>
+                        ))
+                      ) : (
+                        <Badge variant="outline">Add skills you can teach...</Badge>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -384,7 +502,17 @@ const PeerMentorship = () => {
               )}
             </CardContent>
             <CardFooter>
-              <Button disabled={selectedSkills.length === 0}>
+              <Button 
+                disabled={selectedSkills.length === 0}
+                onClick={() => {
+                  toast({
+                    title: "Skill Exchange Updated",
+                    description: "Your skill exchange preferences have been saved.",
+                  });
+                  playSound('success');
+                  speak("Your skill exchange preferences have been updated.");
+                }}
+              >
                 Save My Skill Exchange
               </Button>
             </CardFooter>
@@ -392,70 +520,116 @@ const PeerMentorship = () => {
         </TabsContent>
         
         <TabsContent value="events">
-          <div className="grid grid-cols-1 gap-4">
-            {filteredEvents.map(event => (
-              <Card key={event.id}>
-                <CardContent className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="flex-1">
-                    <h3 className="font-medium text-lg mb-1">{event.title}</h3>
-                    <div className="flex items-center text-sm text-gray-500 mb-2">
-                      <Calendar size={14} className="mr-1" />
-                      {formatEventDate(event.date)}
+          {isEventsLoading ? (
+            <div className="flex justify-center p-8">
+              <Loader2 className="h-8 w-8 animate-spin text-braille-blue" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4">
+              {filteredEvents.map(event => (
+                <Card key={event.id}>
+                  <CardContent className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex-1">
+                      <h3 className="font-medium text-lg mb-1">{event.title}</h3>
+                      <div className="flex items-center text-sm text-gray-500 mb-2">
+                        <Calendar size={14} className="mr-1" />
+                        {formatEventDate(event.date)}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
+                        <Badge variant="outline">{event.category}</Badge>
+                        <span className="text-sm text-gray-500">
+                          Hosted by {event.host}
+                        </span>
+                        <span className="text-sm text-gray-500">
+                          {event.participants} participants
+                        </span>
+                      </div>
+                      {event.description && (
+                        <p className="text-sm text-gray-600">{event.description}</p>
+                      )}
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline">{event.category}</Badge>
-                      <span className="text-sm text-gray-500">
-                        Hosted by {event.host}
-                      </span>
-                      <span className="text-sm text-gray-500">
-                        {event.participants} participants
-                      </span>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline"
+                        onClick={() => {
+                          speak(`Event details: ${event.title}. ${event.description || ''}. Hosted by ${event.host}. Scheduled for ${formatEventDate(event.date)}. This event is in the ${event.category} category.`);
+                        }}
+                      >
+                        <Info size={16} className="mr-1" />
+                        Details
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        onClick={() => {
+                          navigator.clipboard.writeText(
+                            `${event.title}\nDate: ${formatEventDate(event.date)}\nHost: ${event.host}\nCategory: ${event.category}\n${event.description || ''}`
+                          );
+                          toast({
+                            title: "Event Copied",
+                            description: "Event details copied to clipboard",
+                          });
+                        }}
+                      >
+                        <Share size={16} className="mr-1" />
+                        Share
+                      </Button>
+                      <Button onClick={() => handleEventRegistration(event)}>
+                        Register
+                      </Button>
                     </div>
-                  </div>
-                  <Button onClick={() => handleEventRegistration(event)}>
-                    Register
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-            
-            {filteredEvents.length === 0 && (
-              <div className="flex justify-center p-8 bg-gray-50 rounded-lg">
-                <p className="text-gray-500">No upcoming events matching your criteria</p>
-              </div>
-            )}
-            
-            <Card>
-              <CardHeader>
-                <CardTitle>Host Your Own Session</CardTitle>
-                <CardDescription>Share your knowledge with the community</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="mb-4">
-                  Everyone has something valuable to share! You can host study groups, 
-                  skill-sharing sessions, or discussion groups on topics you're passionate about.
-                </p>
-                
-                <div className="space-y-2">
-                  <div className="flex items-start space-x-2">
-                    <ArrowRight size={16} className="mt-1 text-braille-blue" />
-                    <span>Choose a topic relevant to the community</span>
-                  </div>
-                  <div className="flex items-start space-x-2">
-                    <ArrowRight size={16} className="mt-1 text-braille-blue" />
-                    <span>Select a date and time that works for you</span>
-                  </div>
-                  <div className="flex items-start space-x-2">
-                    <ArrowRight size={16} className="mt-1 text-braille-blue" />
-                    <span>Decide on format: text-based, voice chat, or both</span>
-                  </div>
+                  </CardContent>
+                </Card>
+              ))}
+              
+              {filteredEvents.length === 0 && (
+                <div className="flex justify-center p-8 bg-gray-50 rounded-lg">
+                  <p className="text-gray-500">No upcoming events matching your criteria</p>
                 </div>
-              </CardContent>
-              <CardFooter>
-                <Button variant="outline">Create a Session</Button>
-              </CardFooter>
-            </Card>
-          </div>
+              )}
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle>Host Your Own Session</CardTitle>
+                  <CardDescription>Share your knowledge with the community</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="mb-4">
+                    Everyone has something valuable to share! You can host study groups, 
+                    skill-sharing sessions, or discussion groups on topics you're passionate about.
+                  </p>
+                  
+                  <div className="space-y-2">
+                    <div className="flex items-start space-x-2">
+                      <ArrowRight size={16} className="mt-1 text-braille-blue" />
+                      <span>Choose a topic relevant to the community</span>
+                    </div>
+                    <div className="flex items-start space-x-2">
+                      <ArrowRight size={16} className="mt-1 text-braille-blue" />
+                      <span>Select a date and time that works for you</span>
+                    </div>
+                    <div className="flex items-start space-x-2">
+                      <ArrowRight size={16} className="mt-1 text-braille-blue" />
+                      <span>Decide on format: text-based, voice chat, or both</span>
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      toast({
+                        title: "Coming Soon",
+                        description: "This feature will be available soon!",
+                      });
+                      speak("The ability to host your own sessions will be available soon.");
+                    }}
+                  >
+                    Create a Session
+                  </Button>
+                </CardFooter>
+              </Card>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

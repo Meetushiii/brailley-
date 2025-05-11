@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { BookOpen, Mic, MessageSquare, MapPin, Users, Volume2, Edit, Book } from 'lucide-react';
@@ -20,21 +21,12 @@ const Home = () => {
     <div className="container mx-auto px-4 py-8">
       <div className="text-center mb-12">
         <h1 className="text-4xl font-bold text-braille-blue mb-4">Welcome to Braillely</h1>
-        <p className="text-xl mb-6">Learn Braille and Mathematics through an interactive multi-sensory experience</p>
+        <p className="text-xl mb-6">A platform for visually impaired individuals to learn Braille and Mathematics through an interactive multi-sensory experience</p>
         
         <div className="flex justify-center mb-8 overflow-x-auto py-4">
           {brailleCells.map((dots, index) => (
             <BrailleCell key={index} dots={dots} size="lg" />
           ))}
-        </div>
-        
-        <div className="flex flex-wrap justify-center gap-4 mb-8">
-          <Button asChild variant="outline" className="text-braille-blue">
-            <Link to="/register">Register</Link>
-          </Button>
-          <Button asChild>
-            <Link to="/login">Login</Link>
-          </Button>
         </div>
       </div>
 
@@ -149,11 +141,11 @@ const Home = () => {
       </div>
 
       <div className="mt-16 p-6 bg-braille-blue text-white rounded-lg">
-        <h2 className="text-2xl font-bold mb-4">Why Braillely?</h2>
+        <h2 className="text-2xl font-bold mb-4">What is Braillely?</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div>
             <h3 className="text-xl font-bold mb-2">Multi-Sensory Learning</h3>
-            <p>Our platform combines visual, auditory, and tactile learning methods to create a comprehensive educational experience.</p>
+            <p>Our platform combines visual, auditory, and tactile learning methods to create a comprehensive educational experience for visually impaired individuals.</p>
           </div>
           <div>
             <h3 className="text-xl font-bold mb-2">Accessibility First</h3>

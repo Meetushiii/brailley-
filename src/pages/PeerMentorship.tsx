@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -9,11 +8,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAudioContext } from '@/context/AudioContext';
 import { useToast } from '@/hooks/use-toast';
 import { 
-  Users, MessageSquare, Search, Book, Lightbulb, Calendar, ArrowRight, 
-  Loader2, Share, UserCheck, Info, Phone
+  Users, MessageSquare, Search, Lightbulb, Calendar, ArrowRight, 
+  Loader2, Share, UserCheck, Info, Phone, Save, Edit, Trash2
 } from 'lucide-react';
-import { useMentorshipService, Mentor, SkillCategory, MentorshipEvent } from '../services/mentorshipService';
-import { useQuery } from '@tanstack/react-query';
+import { useMentorshipService, Mentor, SkillCategory, MentorshipEvent, UserProfile } from '../services/mentorshipService';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/context/AuthContext';
 
 const PeerMentorship = () => {
   // State
@@ -22,16 +22,22 @@ const PeerMentorship = () => {
   const [userName, setUserName] = useState('Guest User');
   const [userSkills, setUserSkills] = useState<string[]>([]);
   const [userGoals, setUserGoals] = useState<string[]>([]);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [newSkill, setNewSkill] = useState('');
+  const [newGoal, setNewGoal] = useState('');
   
   // Hooks
   const { speak, playSound } = useAudioContext();
   const { toast } = useToast();
   const mentorshipService = useMentorshipService();
+  const queryClient = useQueryClient();
+  const { isAuthenticated, login } = useAuth();
   
-  // Fetch data using React Query
-  const { data: mentors = [], isLoading: isMentorsLoading } = useQuery({
+  // Fetch data using React Query with shorter staletime to ensure fresh data
+  const { data: mentors = [], isLoading: isMentorsLoading, refetch: refetchMentors } = useQuery({
     queryKey: ['mentors'],
     queryFn: () => mentorshipService.getMentors(),
+    staleTime: 10000, // Refresh more frequently to see profile updates
   });
   
   const { data: skillCategories = [], isLoading: isSkillsLoading } = useQuery({
@@ -44,62 +50,156 @@ const PeerMentorship = () => {
     queryFn: () => mentorshipService.getEvents(),
   });
   
-  // Load user profile from local storage
-  useEffect(() => {
-    const savedProfile = localStorage.getItem('user-profile');
-    if (savedProfile) {
-      try {
-        const profile = JSON.parse(savedProfile);
-        setUserName(profile.name || 'Guest User');
-        setUserSkills(profile.skills || []);
-        setUserGoals(profile.goals || []);
-      } catch (error) {
-        console.error('Error loading profile:', error);
+  const { data: userProfile, isLoading: isProfileLoading, refetch: refetchProfile } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: () => mentorshipService.getUserProfile(),
+    staleTime: 5000, // Keep profile data fresh
+  });
+
+  // Update profile mutation with improved error handling
+  const updateProfileMutation = useMutation({
+    mutationFn: (profileData: UserProfile) => mentorshipService.updateProfile(profileData),
+    onSuccess: (data) => {
+      if (data.success) {
+        // Set user as authenticated when profile is saved
+        login();
+        
+        // Force refetch both profile and mentors to update user's mentor card
+        queryClient.invalidateQueries({ queryKey: ['userProfile'] });
+        queryClient.invalidateQueries({ queryKey: ['mentors'] });
+        
+        toast({
+          title: "Profile Saved",
+          description: "Your profile has been permanently saved.",
+        });
+        playSound('success');
+        speak("Your profile has been saved and will be available when you return.");
+        
+        // Explicitly refetch mentors to ensure the user appears in the list
+        setTimeout(() => {
+          refetchMentors();
+        }, 500);
+      } else {
+        toast({
+          title: "Update Warning",
+          description: data.message,
+          variant: "destructive"
+        });
+        playSound('error');
+      }
+    },
+    onError: (error) => {
+      console.error("Profile update error:", error);
+      toast({
+        title: "Update Failed",
+        description: "Failed to save your profile. Please try again later.",
+        variant: "destructive"
+      });
+      playSound('error');
+    }
+  });
+  
+  // Clear profile mutation
+  const clearProfileMutation = useMutation({
+    mutationFn: () => mentorshipService.clearUserProfile(),
+    onSuccess: (data) => {
+      if (data.success) {
+        queryClient.invalidateQueries({ queryKey: ['userProfile'] });
+        queryClient.invalidateQueries({ queryKey: ['mentors'] });
+        setUserName('Guest User');
+        setUserSkills([]);
+        setUserGoals([]);
+        toast({
+          title: "Profile Cleared",
+          description: "Your profile has been reset.",
+        });
+        playSound('success');
+        
+        // Explicitly refetch mentors to ensure user is removed from the list
+        setTimeout(() => {
+          refetchMentors();
+        }, 500);
       }
     }
-  }, []);
+  });
   
-  // Save profile
-  const saveProfile = async () => {
+  // Mentorship request mutation
+  const requestMentorshipMutation = useMutation({
+    mutationFn: (mentorId: number) => mentorshipService.requestMentorship(mentorId),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['userProfile'] });
+      toast({
+        title: "Request Sent!",
+        description: data.message,
+      });
+      playSound('success');
+    }
+  });
+  
+  // Event registration mutation
+  const registerEventMutation = useMutation({
+    mutationFn: (eventId: number) => mentorshipService.registerForEvent(eventId),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['userProfile'] });
+      toast({
+        title: "Registered!",
+        description: data.message,
+      });
+      playSound('success');
+    }
+  });
+  
+  // Load user profile from query with better error handling
+  useEffect(() => {
+    if (userProfile) {
+      setUserName(userProfile.name || 'Guest User');
+      setUserSkills(userProfile.skills || []);
+      setUserGoals(userProfile.goals || []);
+    }
+  }, [userProfile]);
+  
+  // Save profile with immediate feedback
+  const saveProfile = () => {
+    if (userName.trim() === '') {
+      toast({
+        title: "Cannot Save",
+        description: "Please enter your name before saving.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     const profileData = {
       name: userName,
       skills: userSkills,
-      goals: userGoals
+      goals: userGoals,
+      isActive: true
     };
     
-    // Save to local storage
-    localStorage.setItem('user-profile', JSON.stringify(profileData));
-    
-    // Update on backend
-    const result = await mentorshipService.updateProfile(profileData);
-    
-    if (result.success) {
-      toast({
-        title: "Profile Updated",
-        description: result.message,
-      });
-      speak("Your profile has been updated successfully.");
-      playSound('success');
+    console.log("Saving profile data:", profileData);
+    updateProfileMutation.mutate(profileData);
+    setIsEditingProfile(false);
+  };
+  
+  // Clear profile
+  const clearProfile = () => {
+    if (window.confirm('Are you sure you want to clear your profile? This action cannot be undone.')) {
+      clearProfileMutation.mutate();
     }
   };
   
   // Handle contact mentor
-  const handleContactMentor = async (mentor: Mentor) => {
-    const result = await mentorshipService.requestMentorship(mentor.id);
-    
-    toast({
-      title: result.success ? "Request Sent!" : "Request Failed",
-      description: result.message,
-      variant: result.success ? "default" : "destructive",
-    });
-    
-    if (result.success) {
-      speak(`Your mentorship request was sent to ${mentor.name}.`);
-      playSound('success');
-    } else {
-      speak("There was a problem sending your mentorship request.");
-      playSound('error');
+  const handleContactMentor = (mentor: Mentor) => {
+    if (userName === 'Guest User') {
+      toast({
+        title: "Profile Required",
+        description: "Please create your profile before requesting mentorship.",
+        variant: "destructive"
+      });
+      return;
     }
+    requestMentorshipMutation.mutate(mentor.id);
+    speak(`Your mentorship request was sent to ${mentor.name}.`);
   };
   
   // Handle skill toggle
@@ -112,22 +212,17 @@ const PeerMentorship = () => {
   };
   
   // Handle event registration
-  const handleEventRegistration = async (event: MentorshipEvent) => {
-    const result = await mentorshipService.registerForEvent(event.id);
-    
-    toast({
-      title: result.success ? "Registered!" : "Registration Failed",
-      description: result.success ? `You've registered for "${event.title}"` : result.message,
-      variant: result.success ? "default" : "destructive",
-    });
-    
-    if (result.success) {
-      speak(`You've successfully registered for ${event.title}.`);
-      playSound('success');
-    } else {
-      speak("There was a problem with your registration.");
-      playSound('error');
+  const handleEventRegistration = (event: MentorshipEvent) => {
+    if (userName === 'Guest User') {
+      toast({
+        title: "Profile Required",
+        description: "Please create your profile before registering for events.",
+        variant: "destructive"
+      });
+      return;
     }
+    registerEventMutation.mutate(event.id);
+    speak(`You've successfully registered for ${event.title}.`);
   };
   
   // Format event date
@@ -166,26 +261,128 @@ const PeerMentorship = () => {
   // Add user skill
   const addUserSkill = (skill: string) => {
     if (!userSkills.includes(skill)) {
-      setUserSkills([...userSkills, skill]);
+      const newSkills = [...userSkills, skill];
+      setUserSkills(newSkills);
+      // Auto-save the profile when adding skills
+      if (userName !== 'Guest User') {
+        updateProfileMutation.mutate({
+          name: userName,
+          skills: newSkills,
+          goals: userGoals,
+          isActive: true
+        });
+      }
+    }
+  };
+
+  // Add custom user skill
+  const handleAddCustomSkill = () => {
+    if (newSkill && !userSkills.includes(newSkill)) {
+      const newSkills = [...userSkills, newSkill];
+      setUserSkills(newSkills);
+      setNewSkill('');
+      
+      // Auto-save the profile when adding skills
+      if (userName !== 'Guest User') {
+        updateProfileMutation.mutate({
+          name: userName,
+          skills: newSkills,
+          goals: userGoals,
+          isActive: true
+        });
+      }
+    }
+  };
+
+  // Add custom user goal
+  const handleAddCustomGoal = () => {
+    if (newGoal && !userGoals.includes(newGoal)) {
+      const newGoals = [...userGoals, newGoal];
+      setUserGoals(newGoals);
+      setNewGoal('');
+      
+      // Auto-save the profile when adding goals
+      if (userName !== 'Guest User') {
+        updateProfileMutation.mutate({
+          name: userName,
+          skills: userSkills,
+          goals: newGoals,
+          isActive: true
+        });
+      }
     }
   };
 
   // Add user goal
   const addUserGoal = (goal: string) => {
     if (!userGoals.includes(goal)) {
-      setUserGoals([...userGoals, goal]);
+      const newGoals = [...userGoals, goal];
+      setUserGoals(newGoals);
+      
+      // Auto-save the profile when adding goals
+      if (userName !== 'Guest User') {
+        updateProfileMutation.mutate({
+          name: userName,
+          skills: userSkills,
+          goals: newGoals,
+          isActive: true
+        });
+      }
     }
   };
 
   // Remove user skill
   const removeUserSkill = (skill: string) => {
-    setUserSkills(userSkills.filter(s => s !== skill));
+    const newSkills = userSkills.filter(s => s !== skill);
+    setUserSkills(newSkills);
+    
+    // Auto-save the profile when removing skills
+    if (userName !== 'Guest User') {
+      updateProfileMutation.mutate({
+        name: userName,
+        skills: newSkills,
+        goals: userGoals,
+        isActive: true
+      });
+    }
   };
 
   // Remove user goal
   const removeUserGoal = (goal: string) => {
-    setUserGoals(userGoals.filter(g => g !== goal));
+    const newGoals = userGoals.filter(g => g !== goal);
+    setUserGoals(newGoals);
+    
+    // Auto-save the profile when removing goals
+    if (userName !== 'Guest User') {
+      updateProfileMutation.mutate({
+        name: userName,
+        skills: userSkills,
+        goals: newGoals,
+        isActive: true
+      });
+    }
   };
+  
+  // Autosave when editing is turned off
+  useEffect(() => {
+    if (!isEditingProfile && userName.trim() !== '' && userName !== 'Guest User') {
+      saveProfile();
+    }
+  }, [isEditingProfile]);
+
+  // Check if profile exists on initial load and force refetch to ensure latest data
+  useEffect(() => {
+    // Force refetch on mount to ensure we have the latest data
+    refetchProfile();
+    refetchMentors();
+    
+    // Set up an interval to periodically refetch mentors to catch any changes
+    const interval = setInterval(() => {
+      refetchMentors();
+    }, 10000);
+    
+    return () => clearInterval(interval);
+  }, []);
   
   return (
     <div className="container mx-auto px-4 py-8">
@@ -239,55 +436,154 @@ const PeerMentorship = () => {
         
         <Card className="flex-1">
           <CardHeader>
-            <CardTitle>Your Profile</CardTitle>
-            <CardDescription>Complete your profile to unlock all features</CardDescription>
+            <CardTitle className="flex items-center justify-between">
+              <span>Your Profile</span>
+              <div className="flex gap-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setIsEditingProfile(!isEditingProfile)}
+                >
+                  {isEditingProfile ? <Save size={18} /> : <Edit size={18} />}
+                  {isEditingProfile ? ' Save Mode' : ' Edit Mode'}
+                </Button>
+                {userProfile?.isActive && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearProfile}
+                  >
+                    <Trash2 size={18} className="text-red-500" />
+                  </Button>
+                )}
+              </div>
+            </CardTitle>
+            <CardDescription>
+              {userProfile?.isActive 
+                ? "Your permanent profile - changes are automatically saved" 
+                : "Complete your profile to unlock all features"}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-col items-center space-y-4 mb-4">
-              <Avatar className="w-24 h-24">
-                <AvatarFallback className="text-2xl bg-braille-blue text-white">
-                  {userName.split(' ').map(n => n[0]).join('')}
-                </AvatarFallback>
-              </Avatar>
-              <Input 
-                type="text" 
-                value={userName} 
-                onChange={(e) => setUserName(e.target.value)} 
-                placeholder="Your Name"
-                className="max-w-xs text-center"
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <h4 className="font-medium">My Skills:</h4>
-              <div className="flex flex-wrap gap-2">
-                {userSkills.map(skill => (
-                  <Badge key={skill} variant="outline" className="cursor-pointer" onClick={() => removeUserSkill(skill)}>
-                    {skill} ✕
-                  </Badge>
-                ))}
-                {userSkills.length === 0 && (
-                  <Badge variant="outline">Add skills...</Badge>
-                )}
+            {isProfileLoading ? (
+              <div className="flex justify-center py-10">
+                <Loader2 className="h-8 w-8 animate-spin text-braille-blue" />
               </div>
-            </div>
-            
-            <div className="space-y-2">
-              <h4 className="font-medium">Learning Goals:</h4>
-              <div className="flex flex-wrap gap-2">
-                {userGoals.map(goal => (
-                  <Badge key={goal} variant="outline" className="cursor-pointer" onClick={() => removeUserGoal(goal)}>
-                    {goal} ✕
-                  </Badge>
-                ))}
-                {userGoals.length === 0 && (
-                  <Badge variant="outline">Add goals...</Badge>
-                )}
-              </div>
-            </div>
+            ) : (
+              <>
+                <div className="flex flex-col items-center space-y-4 mb-4">
+                  <Avatar className="w-24 h-24">
+                    <AvatarFallback className="text-2xl bg-braille-blue text-white">
+                      {userName.split(' ').map(n => n[0]).join('')}
+                    </AvatarFallback>
+                  </Avatar>
+                  <Input 
+                    type="text" 
+                    value={userName} 
+                    onChange={(e) => setUserName(e.target.value)} 
+                    placeholder="Your Name"
+                    className="max-w-xs text-center"
+                    disabled={!isEditingProfile}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <h4 className="font-medium">My Skills:</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {userSkills.map(skill => (
+                      <Badge 
+                        key={skill} 
+                        variant="outline" 
+                        className={isEditingProfile ? "cursor-pointer" : ""}
+                        onClick={() => isEditingProfile && removeUserSkill(skill)}
+                      >
+                        {skill} {isEditingProfile && "✕"}
+                      </Badge>
+                    ))}
+                    {userSkills.length === 0 && (
+                      <Badge variant="outline">Add skills...</Badge>
+                    )}
+                  </div>
+                  
+                  {isEditingProfile && (
+                    <div className="flex mt-2 gap-2">
+                      <Input 
+                        placeholder="Add a new skill" 
+                        value={newSkill}
+                        onChange={(e) => setNewSkill(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && newSkill.trim()) {
+                            handleAddCustomSkill();
+                          }
+                        }}
+                      />
+                      <Button 
+                        size="sm" 
+                        onClick={handleAddCustomSkill}
+                        disabled={!newSkill.trim()}
+                      >
+                        Add
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="space-y-2">
+                  <h4 className="font-medium">Learning Goals:</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {userGoals.map(goal => (
+                      <Badge 
+                        key={goal} 
+                        variant="outline" 
+                        className={isEditingProfile ? "cursor-pointer" : ""}
+                        onClick={() => isEditingProfile && removeUserGoal(goal)}
+                      >
+                        {goal} {isEditingProfile && "✕"}
+                      </Badge>
+                    ))}
+                    {userGoals.length === 0 && (
+                      <Badge variant="outline">Add goals...</Badge>
+                    )}
+                  </div>
+                  
+                  {isEditingProfile && (
+                    <div className="flex mt-2 gap-2">
+                      <Input 
+                        placeholder="Add a new goal" 
+                        value={newGoal}
+                        onChange={(e) => setNewGoal(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && newGoal.trim()) {
+                            handleAddCustomGoal();
+                          }
+                        }}
+                      />
+                      <Button 
+                        size="sm" 
+                        onClick={handleAddCustomGoal}
+                        disabled={!newGoal.trim()}
+                      >
+                        Add
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </CardContent>
           <CardFooter>
-            <Button className="w-full" onClick={saveProfile}>Save Profile</Button>
+            <Button 
+              className="w-full" 
+              onClick={saveProfile}
+              disabled={updateProfileMutation.isPending || userName.trim() === ''}
+            >
+              {updateProfileMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : userProfile?.isActive ? 'Update Profile' : 'Save Profile'}
+            </Button>
           </CardFooter>
         </Card>
       </div>
@@ -319,7 +615,7 @@ const PeerMentorship = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {filteredMentors.map(mentor => (
-                <Card key={mentor.id}>
+                <Card key={mentor.id} className={mentor.name.includes('(You)') ? "border-2 border-braille-blue" : ""}>
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-4">
@@ -364,6 +660,9 @@ const PeerMentorship = () => {
                             {skill}
                           </Badge>
                         ))}
+                        {mentor.expertise.length === 0 && (
+                          <span className="text-sm text-gray-500">No expertise listed</span>
+                        )}
                       </div>
                     </div>
                   </CardContent>
@@ -372,31 +671,33 @@ const PeerMentorship = () => {
                       variant="outline" 
                       size="sm" 
                       className="flex items-center gap-1"
-                      onClick={() => speak(`${mentor.name} is an expert in ${mentor.expertise.join(', ')}. ${mentor.bio}`)}
+                      onClick={() => speak(`${mentor.name} is ${mentor.expertise.length > 0 ? `an expert in ${mentor.expertise.join(', ')}` : 'still building expertise'}. ${mentor.bio}`)}
                     >
                       <Info size={16} />
                       Profile
                     </Button>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex items-center gap-1"
-                        disabled={!mentor.available}
-                      >
-                        <Phone size={16} />
-                        Call
-                      </Button>
-                      <Button 
-                        size="sm"
-                        className="flex items-center gap-1"
-                        disabled={!mentor.available}
-                        onClick={() => handleContactMentor(mentor)}
-                      >
-                        <UserCheck size={16} />
-                        Request
-                      </Button>
-                    </div>
+                    {!mentor.name.includes('(You)') && (
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex items-center gap-1"
+                          disabled={!mentor.available}
+                        >
+                          <Phone size={16} />
+                          Call
+                        </Button>
+                        <Button 
+                          size="sm"
+                          className="flex items-center gap-1"
+                          disabled={!mentor.available || requestMentorshipMutation.isPending}
+                          onClick={() => handleContactMentor(mentor)}
+                        >
+                          <UserCheck size={16} />
+                          Request
+                        </Button>
+                      </div>
+                    )}
                   </CardFooter>
                 </Card>
               ))}
@@ -409,6 +710,7 @@ const PeerMentorship = () => {
             </div>
           )}
         </TabsContent>
+
         
         <TabsContent value="skills">
           {isSkillsLoading ? (
@@ -573,7 +875,10 @@ const PeerMentorship = () => {
                         <Share size={16} className="mr-1" />
                         Share
                       </Button>
-                      <Button onClick={() => handleEventRegistration(event)}>
+                      <Button 
+                        onClick={() => handleEventRegistration(event)}
+                        disabled={registerEventMutation.isPending}
+                      >
                         Register
                       </Button>
                     </div>

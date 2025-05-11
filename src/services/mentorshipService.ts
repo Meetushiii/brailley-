@@ -1,4 +1,3 @@
-
 import { useToast } from "@/hooks/use-toast";
 
 // Mock API for now - would be replaced with actual backend calls
@@ -9,6 +8,9 @@ export interface Mentor {
   bio: string;
   available: boolean;
   avatarUrl?: string;
+  email?: string;
+  contactPreference?: 'email' | 'phone' | 'both';
+  phone?: string;
 }
 
 export interface SkillCategory {
@@ -26,6 +28,52 @@ export interface MentorshipEvent {
   description?: string;
   location?: string;
 }
+
+export interface UserProfile {
+  name: string;
+  skills: string[];
+  goals: string[];
+  joinedEvents?: number[];
+  connectedMentors?: number[];
+  isActive?: boolean;
+  email?: string;
+}
+
+export interface MentorshipRequest {
+  id: number;
+  mentorId: number;
+  menteeId: number;
+  menteeName: string;
+  menteeEmail: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  message?: string;
+  createdAt: string;
+}
+
+// Local storage keys
+const PROFILE_STORAGE_KEY = 'braillely-user-profile';
+const EVENTS_STORAGE_KEY = 'braillely-registered-events';
+const MENTORS_STORAGE_KEY = 'braillely-connected-mentors';
+
+// Helper function to safely get/parse localStorage data
+const getStorageItem = <T>(key: string, defaultValue: T): T => {
+  try {
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : defaultValue;
+  } catch (error) {
+    console.error(`Error retrieving ${key} from localStorage:`, error);
+    return defaultValue;
+  }
+};
+
+// Helper function to safely set localStorage data
+const setStorageItem = <T>(key: string, value: T): void => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.error(`Error saving ${key} to localStorage:`, error);
+  }
+};
 
 // Mock data service - this would connect to a real backend API
 export const mentorshipService = {
@@ -74,10 +122,18 @@ export const mentorshipService = {
             bio: 'Certified O&M specialist with 10 years of experience in schools.',
             available: true,
             avatarUrl: 'https://i.pravatar.cc/150?img=5'
-          }
+          },
+          // Important: Add the current user as a mentor if they have a saved profile
+          // This allows them to see themselves in the mentors list
+          ...getUserAsMentor()
         ]);
       }, 500);
     });
+  },
+
+  // New function: Get the current user as a mentor if they have a saved profile
+  getUserAsMentor: () => {
+    return getUserAsMentor();
   },
 
   // Get all skill categories
@@ -156,42 +212,279 @@ export const mentorshipService = {
     });
   },
 
-  // Request mentorship with a mentor
+  // Get user profile - now with improved localStorage handling
+  getUserProfile: async (): Promise<UserProfile> => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const defaultProfile = {
+          name: 'Guest User',
+          skills: [],
+          goals: [],
+          joinedEvents: [],
+          connectedMentors: [],
+          isActive: false
+        };
+        
+        const storedProfile = getStorageItem<UserProfile>(PROFILE_STORAGE_KEY, defaultProfile);
+        
+        // Set profile active
+        if (!storedProfile.isActive && storedProfile.name !== 'Guest User') {
+          storedProfile.isActive = true;
+          setStorageItem(PROFILE_STORAGE_KEY, storedProfile);
+        }
+        
+        resolve(storedProfile);
+      }, 300);
+    });
+  },
+
+  // Enhanced request mentorship with email notification
   requestMentorship: async (mentorId: number): Promise<{success: boolean, message: string}> => {
     return new Promise((resolve) => {
       setTimeout(() => {
-        resolve({
-          success: true,
-          message: `Your mentorship request has been sent successfully.`
-        });
+        try {
+          const userProfile = getStorageItem<UserProfile>(PROFILE_STORAGE_KEY, {
+            name: 'Guest User',
+            skills: [],
+            goals: [],
+            joinedEvents: [],
+            connectedMentors: []
+          });
+          
+          // Add to connected mentors if not already connected
+          if (!userProfile.connectedMentors) {
+            userProfile.connectedMentors = [];
+          }
+          
+          if (!userProfile.connectedMentors.includes(mentorId)) {
+            userProfile.connectedMentors.push(mentorId);
+            setStorageItem(PROFILE_STORAGE_KEY, userProfile);
+
+            // Create mentorship request
+            const request: MentorshipRequest = {
+              id: Date.now(),
+              mentorId,
+              menteeId: Date.now(), // In real app, this would be the user's ID
+              menteeName: userProfile.name,
+              menteeEmail: userProfile.email || '',
+              status: 'pending',
+              createdAt: new Date().toISOString()
+            };
+
+            // Store the request
+            const requests = getStorageItem<MentorshipRequest[]>('mentorship_requests', []);
+            requests.push(request);
+            setStorageItem('mentorship_requests', requests);
+
+            // In a real app, this would send an email notification
+            console.log('Sending email notification to mentor:', {
+              to: 'mentor@example.com', // In real app, this would be the mentor's email
+              subject: 'New Mentorship Request',
+              body: `${userProfile.name} has requested mentorship with you.`
+            });
+          }
+          
+          resolve({
+            success: true,
+            message: `Your mentorship request has been sent successfully. The mentor will be notified via email.`
+          });
+        } catch (error) {
+          console.error('Error saving mentor:', error);
+          resolve({
+            success: false,
+            message: 'An error occurred while saving your mentorship request.'
+          });
+        }
       }, 800);
     });
   },
 
-  // Register for an event
+  // Get mentorship requests for a mentor
+  getMentorshipRequests: async (mentorId: number): Promise<MentorshipRequest[]> => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const requests = getStorageItem<MentorshipRequest[]>('mentorship_requests', []);
+        resolve(requests.filter(request => request.mentorId === mentorId));
+      }, 500);
+    });
+  },
+
+  // Update mentorship request status
+  updateMentorshipRequest: async (requestId: number, status: 'accepted' | 'rejected'): Promise<{success: boolean, message: string}> => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        try {
+          const requests = getStorageItem<MentorshipRequest[]>('mentorship_requests', []);
+          const requestIndex = requests.findIndex(r => r.id === requestId);
+          
+          if (requestIndex !== -1) {
+            requests[requestIndex].status = status;
+            setStorageItem('mentorship_requests', requests);
+
+            // In a real app, this would send an email notification
+            console.log('Sending email notification to mentee:', {
+              to: requests[requestIndex].menteeEmail,
+              subject: `Mentorship Request ${status}`,
+              body: `Your mentorship request has been ${status}.`
+            });
+
+            resolve({
+              success: true,
+              message: `Mentorship request has been ${status}.`
+            });
+          } else {
+            resolve({
+              success: false,
+              message: 'Mentorship request not found.'
+            });
+          }
+        } catch (error) {
+          console.error('Error updating mentorship request:', error);
+          resolve({
+            success: false,
+            message: 'An error occurred while updating the mentorship request.'
+          });
+        }
+      }, 500);
+    });
+  },
+
+  // Register for an event - improved storage
   registerForEvent: async (eventId: number): Promise<{success: boolean, message: string}> => {
     return new Promise((resolve) => {
       setTimeout(() => {
-        resolve({
-          success: true,
-          message: `You've successfully registered for the event.`
-        });
+        try {
+          const userProfile = getStorageItem<UserProfile>(PROFILE_STORAGE_KEY, {
+            name: 'Guest User',
+            skills: [],
+            goals: [],
+            joinedEvents: [],
+            connectedMentors: []
+          });
+          
+          // Add to joined events if not already registered
+          if (!userProfile.joinedEvents) {
+            userProfile.joinedEvents = [];
+          }
+          
+          if (!userProfile.joinedEvents.includes(eventId)) {
+            userProfile.joinedEvents.push(eventId);
+            setStorageItem(PROFILE_STORAGE_KEY, userProfile);
+          }
+          
+          resolve({
+            success: true,
+            message: `You've successfully registered for the event.`
+          });
+        } catch (error) {
+          console.error('Error registering for event:', error);
+          resolve({
+            success: false,
+            message: 'An error occurred while registering for the event.'
+          });
+        }
       }, 600);
     });
   },
 
-  // Update user profile
-  updateProfile: async (profileData: {name: string, skills: string[], goals: string[]}): Promise<{success: boolean, message: string}> => {
+  // Update user profile - now with improved localStorage handling and permanent saving
+  updateProfile: async (profileData: UserProfile): Promise<{success: boolean, message: string}> => {
     return new Promise((resolve) => {
       setTimeout(() => {
-        resolve({
-          success: true,
-          message: 'Your profile has been updated successfully.'
-        });
+        try {
+          // Get existing profile to merge with any existing data not in the update
+          const existingProfile = getStorageItem<UserProfile>(PROFILE_STORAGE_KEY, {
+            name: 'Guest User',
+            skills: [],
+            goals: [],
+            joinedEvents: [],
+            connectedMentors: [],
+            isActive: false
+          });
+          
+          // Merge the existing profile with the new data
+          const mergedProfile = {
+            ...existingProfile,
+            ...profileData,
+            // Preserve these arrays if they exist in the existing profile
+            joinedEvents: existingProfile.joinedEvents || [],
+            connectedMentors: existingProfile.connectedMentors || [],
+            // Always set active to true when updating profile
+            isActive: true
+          };
+          
+          // Save to local storage
+          setStorageItem(PROFILE_STORAGE_KEY, mergedProfile);
+          console.log('Profile saved permanently to localStorage:', mergedProfile);
+          
+          resolve({
+            success: true,
+            message: 'Your profile has been permanently saved.'
+          });
+        } catch (error) {
+          console.error('Error updating profile:', error);
+          resolve({
+            success: false,
+            message: 'An error occurred while updating your profile.'
+          });
+        }
       }, 700);
+    });
+  },
+  
+  // Clear user profile and data (for testing)
+  clearUserProfile: async (): Promise<{success: boolean, message: string}> => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        try {
+          localStorage.removeItem(PROFILE_STORAGE_KEY);
+          localStorage.removeItem(EVENTS_STORAGE_KEY);
+          localStorage.removeItem(MENTORS_STORAGE_KEY);
+          
+          resolve({
+            success: true,
+            message: 'Your profile has been cleared.'
+          });
+        } catch (error) {
+          console.error('Error clearing profile:', error);
+          resolve({
+            success: false,
+            message: 'An error occurred while clearing your profile.'
+          });
+        }
+      }, 300);
     });
   }
 };
+
+// Helper function to turn the current user profile into a mentor object
+// This allows the user to see themselves in the mentor list
+function getUserAsMentor(): Mentor[] {
+  try {
+    const userProfile = getStorageItem<UserProfile>(PROFILE_STORAGE_KEY, {
+      name: 'Guest User',
+      skills: [],
+      goals: [],
+      isActive: false
+    });
+
+    // Only add the user as a mentor if they have a saved and active profile
+    if (userProfile.isActive && userProfile.name !== 'Guest User') {
+      return [{
+        id: 999, // Use a high ID to avoid conflicts with mock mentors
+        name: userProfile.name + ' (You)',
+        expertise: userProfile.skills || [],
+        bio: 'This is your profile. Your skills are shown as your expertise.',
+        available: true,
+        avatarUrl: undefined // Could be added in future to let users set their avatar
+      }];
+    }
+    return [];
+  } catch (error) {
+    console.error('Error creating user mentor profile:', error);
+    return [];
+  }
+}
 
 // Custom hook to interact with the mentorship service
 export const useMentorshipService = () => {
@@ -215,6 +508,14 @@ export const useMentorshipService = () => {
         return [];
       }
     },
+    getUserAsMentor: () => {
+      try {
+        return mentorshipService.getUserAsMentor();
+      } catch (error: any) {
+        handleError(error);
+        return [];
+      }
+    },
     getSkillCategories: async () => {
       try {
         return await mentorshipService.getSkillCategories();
@@ -231,12 +532,36 @@ export const useMentorshipService = () => {
         return [];
       }
     },
+    getUserProfile: async () => {
+      try {
+        return await mentorshipService.getUserProfile();
+      } catch (error: any) {
+        handleError(error);
+        return { name: 'Guest User', skills: [], goals: [], isActive: false };
+      }
+    },
     requestMentorship: async (mentorId: number) => {
       try {
         return await mentorshipService.requestMentorship(mentorId);
       } catch (error: any) {
         handleError(error);
         return { success: false, message: 'Failed to send mentorship request.' };
+      }
+    },
+    getMentorshipRequests: async (mentorId: number) => {
+      try {
+        return await mentorshipService.getMentorshipRequests(mentorId);
+      } catch (error: any) {
+        handleError(error);
+        return [];
+      }
+    },
+    updateMentorshipRequest: async (requestId: number, status: 'accepted' | 'rejected') => {
+      try {
+        return await mentorshipService.updateMentorshipRequest(requestId, status);
+      } catch (error: any) {
+        handleError(error);
+        return { success: false, message: 'Failed to update mentorship request.' };
       }
     },
     registerForEvent: async (eventId: number) => {
@@ -247,12 +572,20 @@ export const useMentorshipService = () => {
         return { success: false, message: 'Failed to register for event.' };
       }
     },
-    updateProfile: async (profileData: {name: string, skills: string[], goals: string[]}) => {
+    updateProfile: async (profileData: UserProfile) => {
       try {
         return await mentorshipService.updateProfile(profileData);
       } catch (error: any) {
         handleError(error);
         return { success: false, message: 'Failed to update profile.' };
+      }
+    },
+    clearUserProfile: async () => {
+      try {
+        return await mentorshipService.clearUserProfile();
+      } catch (error: any) {
+        handleError(error);
+        return { success: false, message: 'Failed to clear profile.' };
       }
     }
   };

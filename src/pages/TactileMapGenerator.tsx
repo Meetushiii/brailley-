@@ -9,75 +9,28 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAudioContext } from '@/context/AudioContext';
 import { useToast } from '@/hooks/use-toast';
+import WorldMap from '@/components/WorldMap';
 import { 
   MapPin, Search, ArrowDown, ArrowUp, ArrowLeft, ArrowRight,
-  Headphones, Download, Plus, Minus
+  Headphones, Download, Plus, Minus, Map
 } from 'lucide-react';
-import { GoogleMap, useJsApiLoader, Marker, Circle } from '@react-google-maps/api';
-
-// Define map container styles
-const mapContainerStyle = {
-  width: '100%',
-  height: '400px'
-};
-
-// Initial center position
-const center = {
-  lat: 37.7749,
-  lng: -122.4194
-};
-
-const mapOptions = {
-  disableDefaultUI: true,
-  zoomControl: false,
-  streetViewControl: false,
-  mapTypeControl: false,
-  fullscreenControl: false,
-  styles: [
-    {
-      featureType: 'all',
-      elementType: 'labels.text',
-      stylers: [{ visibility: 'on' }]
-    }
-  ]
-};
-
-// Fix the libraries type definition
-const libraries: ["places", "geometry"] = ["places", "geometry"];
 
 const TactileMapGenerator = () => {
-  // Google Maps API loader
-  const { isLoaded, loadError } = useJsApiLoader({
-    googleMapsApiKey: "AIzaSyBubaEt-Fr_KuVLHlmur6ru16GUNLJmE-0", // This is a development key
-    libraries,
-  });
-
   const [address, setAddress] = useState('');
   const [searching, setSearching] = useState(false);
   const [mapGenerated, setMapGenerated] = useState(false);
-  const [currentLocation, setCurrentLocation] = useState({ x: 50, y: 50 });
-  const [mapCenter, setMapCenter] = useState(center);
   const [zoomLevel, setZoomLevel] = useState(12);
   const [poiEnabled, setPoiEnabled] = useState(true);
   const [audioFeedback, setAudioFeedback] = useState(true);
   const [vibrationFeedback, setVibrationFeedback] = useState(true);
   const [mapMode, setMapMode] = useState<'standard' | 'highContrast' | 'braille'>('standard');
-  const [landmarks, setLandmarks] = useState<{id: number, name: string, type: string, position: {lat: number, lng: number}}[]>([]);
-  const [mapKey, setMapKey] = useState(Date.now());
-
-  // Fix the map reference type
-  const mapRef = useRef<google.maps.Map | null>(null);
+  const [currentPlace, setCurrentPlace] = useState('');
+  
   const { speak, playSound } = useAudioContext();
   const { toast } = useToast();
 
-  // Save map instance reference  
-  const onMapLoad = useCallback((map: google.maps.Map) => {
-    mapRef.current = map;
-  }, []);
-
-  // Geocode the address and center the map
   const generateMap = () => {
-    if (!isLoaded || !address.trim()) {
+    if (!address.trim()) {
       toast({
         variant: "destructive",
         title: "Address required",
@@ -88,142 +41,38 @@ const TactileMapGenerator = () => {
     
     setSearching(true);
     
-    // Use Google Maps Geocoding service
-    const geocoder = new google.maps.Geocoder();
-    geocoder.geocode({ address }, (results, status) => {
-      if (status === google.maps.GeocoderStatus.OK && results && results[0]) {
-        const location = results[0].geometry.location;
-        const newCenter = {
-          lat: location.lat(),
-          lng: location.lng()
-        };
-        
-        setMapCenter(newCenter);
-        setMapGenerated(true);
-        
-        // Generate POIs around the area
-        const newLandmarks = [
-          { 
-            id: 1, 
-            name: "Coffee Shop", 
-            type: "amenity", 
-            position: {
-              lat: newCenter.lat + 0.003,
-              lng: newCenter.lng - 0.002
-            }
-          },
-          { 
-            id: 2, 
-            name: "Bus Station", 
-            type: "transit", 
-            position: {
-              lat: newCenter.lat - 0.002,
-              lng: newCenter.lng + 0.003
-            }
-          },
-          { 
-            id: 3, 
-            name: "Park", 
-            type: "recreation", 
-            position: {
-              lat: newCenter.lat + 0.001,
-              lng: newCenter.lng + 0.004
-            }
-          },
-          { 
-            id: 4, 
-            name: "Library", 
-            type: "education", 
-            position: {
-              lat: newCenter.lat - 0.004,
-              lng: newCenter.lng - 0.001
-            }
-          },
-          { 
-            id: 5, 
-            name: "Restaurant", 
-            type: "food", 
-            position: {
-              lat: newCenter.lat - 0.0005,
-              lng: newCenter.lng - 0.005
-            }
-          }
-        ];
-        
-        setLandmarks(newLandmarks);
-        setMapKey(Date.now()); // Force map rerender
-        
-        speak(`Map generated for ${results[0].formatted_address}. Use arrow keys to explore. 5 points of interest found.`);
-        toast({
-          title: "Map generated",
-          description: `Tactile map created for ${results[0].formatted_address}`,
-        });
-        playSound('success');
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Location not found",
-          description: "Could not find the specified location.",
-        });
-        speak("Location not found. Please try a different address.");
-      }
-      
+    // Simulate geocoding process
+    setTimeout(() => {
+      setMapGenerated(true);
       setSearching(false);
-    });
+      
+      speak(`Map generated for ${address}. Use arrow keys to explore. 5 points of interest found.`);
+      toast({
+        title: "Map generated",
+        description: `Tactile map created for ${address}`,
+      });
+      playSound('success');
+    }, 1500);
   };
   
-  // Handle arrow key navigation on the map
   const moveOnMap = (direction: 'up' | 'down' | 'left' | 'right') => {
-    if (!mapGenerated || !mapRef.current) return;
+    if (!mapGenerated) return;
     
-    const map = mapRef.current;
-    const currentCenter = map.getCenter();
-    if (!currentCenter) return;
+    // Simulate finding nearby landmarks
+    const nearbyOptions = [
+      { name: "Coffee Shop", type: "amenity" },
+      { name: "Bus Station", type: "transit" },
+      { name: "Park", type: "recreation" },
+      { name: "Library", type: "education" },
+      { name: "Restaurant", type: "food" }
+    ];
     
-    const lat = currentCenter.lat();
-    const lng = currentCenter.lng();
-    const latOffset = 0.002;
-    const lngOffset = 0.002;
-    
-    let newLat = lat;
-    let newLng = lng;
-    
-    switch (direction) {
-      case 'up':
-        newLat += latOffset;
-        break;
-      case 'down':
-        newLat -= latOffset;
-        break;
-      case 'left':
-        newLng -= lngOffset;
-        break;
-      case 'right':
-        newLng += lngOffset;
-        break;
-    }
-    
-    const newCenter = new google.maps.LatLng(newLat, newLng);
-    map.panTo(newCenter);
-    
-    // Find nearby landmarks
-    const nearbyLandmark = landmarks.find(landmark => {
-      const landmarkLatLng = new google.maps.LatLng(
-        landmark.position.lat,
-        landmark.position.lng
-      );
+    // 30% chance to find a landmark
+    if (Math.random() > 0.7) {
+      const randomLandmark = nearbyOptions[Math.floor(Math.random() * nearbyOptions.length)];
       
-      const distance = google.maps.geometry.spherical.computeDistanceBetween(
-        newCenter,
-        landmarkLatLng
-      );
-      
-      return distance < 200; // Within 200 meters
-    });
-    
-    if (nearbyLandmark) {
       if (audioFeedback) {
-        speak(`Nearby: ${nearbyLandmark.name}`);
+        speak(`Nearby: ${randomLandmark.name}`);
       }
       
       if (vibrationFeedback && navigator.vibrate) {
@@ -232,7 +81,7 @@ const TactileMapGenerator = () => {
       
       toast({
         title: "Point of Interest",
-        description: nearbyLandmark.name,
+        description: randomLandmark.name,
       });
     }
   };
@@ -258,7 +107,6 @@ const TactileMapGenerator = () => {
         e.preventDefault();
         break;
       case ' ':
-        // Spacebar to announce current position
         announcePosition();
         e.preventDefault();
         break;
@@ -266,60 +114,17 @@ const TactileMapGenerator = () => {
   };
   
   const announcePosition = () => {
-    if (!mapGenerated || !mapRef.current) return;
+    if (!mapGenerated) return;
     
-    const map = mapRef.current;
-    const currentCenter = map.getCenter();
-    if (!currentCenter) return;
-    
-    // Find nearby landmarks
-    const nearby = landmarks.filter(landmark => {
-      const landmarkLatLng = new google.maps.LatLng(
-        landmark.position.lat,
-        landmark.position.lng
-      );
-      
-      const currentLatLng = new google.maps.LatLng(
-        currentCenter.lat(),
-        currentCenter.lng()
-      );
-      
-      const distance = google.maps.geometry.spherical.computeDistanceBetween(
-        currentLatLng,
-        landmarkLatLng
-      );
-      
-      return distance < 300; // Within 300 meters
-    });
-    
-    if (nearby.length > 0) {
-      speak(`You are near: ${nearby.map(l => l.name).join(', ')}`);
+    if (currentPlace) {
+      speak(`You are at ${currentPlace}`);
     } else {
-      speak(`You are at position ${currentCenter.lat().toFixed(4)}, ${currentCenter.lng().toFixed(4)} on the map.`);
+      speak(`You are at the center of the map.`);
     }
   };
   
   const toggleMapMode = (mode: 'standard' | 'highContrast' | 'braille') => {
     setMapMode(mode);
-    
-    // Apply different map styles based on mode
-    if (mapRef.current) {
-      if (mode === 'highContrast') {
-        mapRef.current.setOptions({
-          styles: [
-            { elementType: "geometry", stylers: [{ color: "#000000" }] },
-            { elementType: "labels.text.fill", stylers: [{ color: "#ffffff" }] },
-            { elementType: "labels.text.stroke", stylers: [{ color: "#000000" }] },
-            { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
-            { featureType: "water", elementType: "geometry", stylers: [{ color: "#0f0f70" }] }
-          ]
-        });
-      } else {
-        mapRef.current.setOptions({
-          styles: []
-        });
-      }
-    }
     
     if (mapGenerated) {
       speak(`Map mode changed to ${mode}`);
@@ -339,44 +144,29 @@ const TactileMapGenerator = () => {
   };
   
   const zoomIn = () => {
-    if (mapRef.current) {
-      const newZoom = mapRef.current.getZoom() + 1;
-      mapRef.current.setZoom(newZoom);
-      setZoomLevel(newZoom);
-      
-      if (audioFeedback) {
-        speak(`Zoom level ${newZoom}`);
-      }
+    const newZoom = zoomLevel + 1;
+    setZoomLevel(newZoom);
+    
+    if (audioFeedback) {
+      speak(`Zoom level ${newZoom}`);
     }
   };
   
   const zoomOut = () => {
-    if (mapRef.current) {
-      const newZoom = mapRef.current.getZoom() - 1;
-      mapRef.current.setZoom(newZoom);
-      setZoomLevel(newZoom);
-      
-      if (audioFeedback) {
-        speak(`Zoom level ${newZoom}`);
-      }
+    const newZoom = zoomLevel - 1;
+    setZoomLevel(newZoom);
+    
+    if (audioFeedback) {
+      speak(`Zoom level ${newZoom}`);
     }
   };
 
-  // Map render status handling
-  if (loadError) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <Card>
-          <CardContent className="p-6">
-            <div className="text-center">
-              <h2 className="text-xl font-bold text-red-600 mb-2">Error Loading Maps</h2>
-              <p>Unable to load Google Maps. Please check your connection or API key.</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  const handlePlaceFound = (place: string) => {
+    setCurrentPlace(place);
+    if (audioFeedback) {
+      speak(`Selected location: ${place}`);
+    }
+  };
   
   return (
     <div className="container mx-auto px-4 py-8">
@@ -399,7 +189,7 @@ const TactileMapGenerator = () => {
                   aria-label="Enter location"
                 />
               </div>
-              <Button onClick={generateMap} disabled={searching || !address.trim() || !isLoaded}>
+              <Button onClick={generateMap} disabled={searching || !address.trim()}>
                 {searching ? "Searching..." : (
                   <>
                     <Search size={16} className="mr-2" />
@@ -490,129 +280,81 @@ const TactileMapGenerator = () => {
                 step={1}
                 onValueChange={(v) => {
                   setZoomLevel(v[0]);
-                  if (mapRef.current) {
-                    mapRef.current.setZoom(v[0]);
-                  }
                 }}
                 disabled={!mapGenerated}
               />
             </div>
             
-            {/* Google Maps Component */}
+            {/* Map Display Area - Now using the WorldMap component */}
             <div 
-              className="w-full rounded-lg border border-gray-200 overflow-hidden focus:outline-none focus:ring-2 focus:ring-braille-blue focus:border-transparent"
+              className="w-full h-[400px] rounded-lg border border-gray-200 overflow-hidden focus:outline-none focus:ring-2 focus:ring-braille-blue focus:border-transparent"
               tabIndex={0}
               onKeyDown={handleKeyNavigation}
             >
-              {isLoaded ? (
-                <GoogleMap
-                  key={mapKey}
-                  mapContainerStyle={mapContainerStyle}
-                  center={mapCenter}
-                  zoom={zoomLevel}
-                  options={mapOptions}
-                  onLoad={onMapLoad}
-                >
-                  {/* User location marker */}
-                  <Marker
-                    position={mapCenter}
-                    icon={{
-                      path: google.maps.SymbolPath.CIRCLE,
-                      scale: 10,
-                      fillColor: "#FF0000",
-                      fillOpacity: 1,
-                      strokeWeight: 2,
-                      strokeColor: "#FFFFFF",
-                    }}
-                  />
-                  
-                  {/* Landmark markers */}
-                  {poiEnabled && landmarks.map(landmark => (
-                    <Marker
-                      key={landmark.id}
-                      position={landmark.position}
-                      title={landmark.name}
-                      onClick={() => {
-                        speak(landmark.name);
-                        toast({
-                          title: landmark.name,
-                          description: `Type: ${landmark.type}`,
-                        });
-                      }}
-                    />
-                  ))}
-                  
-                  {/* User interaction radius */}
-                  <Circle
-                    center={mapCenter}
-                    radius={200}
-                    options={{
-                      strokeColor: '#FF0000',
-                      strokeOpacity: 0.5,
-                      strokeWeight: 2,
-                      fillColor: '#FF0000',
-                      fillOpacity: 0.1,
-                    }}
-                  />
-                </GoogleMap>
+              {mapGenerated || true ? (
+                <WorldMap 
+                  mapMode={mapMode} 
+                  onPlaceFound={handlePlaceFound}
+                />
               ) : (
-                <div className="flex items-center justify-center h-80 bg-gray-100">
-                  <p className="text-gray-400">Loading Google Maps...</p>
+                <div className="w-full h-full flex items-center justify-center bg-gray-50">
+                  <div className="flex flex-col items-center justify-center">
+                    <Map className="text-gray-400 mb-2" size={40} />
+                    <p className="text-gray-400">Enter a location to generate a map</p>
+                  </div>
                 </div>
               )}
             </div>
             
             {/* Navigation Controls */}
-            {mapGenerated && (
-              <div className="flex flex-col items-center justify-center space-y-2">
-                <div>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => moveOnMap('up')}
-                    aria-label="Move up"
-                  >
-                    <ArrowUp size={16} />
-                  </Button>
-                </div>
-                <div className="flex space-x-2">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => moveOnMap('left')}
-                    aria-label="Move left"
-                  >
-                    <ArrowLeft size={16} />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={announcePosition}
-                    aria-label="Announce position"
-                  >
-                    <Headphones size={16} className="mr-2" />
-                    Where am I?
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => moveOnMap('right')}
-                    aria-label="Move right"
-                  >
-                    <ArrowRight size={16} />
-                  </Button>
-                </div>
-                <div>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => moveOnMap('down')}
-                    aria-label="Move down"
-                  >
-                    <ArrowDown size={16} />
-                  </Button>
-                </div>
+            <div className="flex flex-col items-center justify-center space-y-2">
+              <div>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => moveOnMap('up')}
+                  aria-label="Move up"
+                >
+                  <ArrowUp size={16} />
+                </Button>
               </div>
-            )}
+              <div className="flex space-x-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => moveOnMap('left')}
+                  aria-label="Move left"
+                >
+                  <ArrowLeft size={16} />
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={announcePosition}
+                  aria-label="Announce position"
+                >
+                  <Headphones size={16} className="mr-2" />
+                  Where am I?
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => moveOnMap('right')}
+                  aria-label="Move right"
+                >
+                  <ArrowRight size={16} />
+                </Button>
+              </div>
+              <div>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => moveOnMap('down')}
+                  aria-label="Move down"
+                >
+                  <ArrowDown size={16} />
+                </Button>
+              </div>
+            </div>
           </div>
         </CardContent>
         <CardFooter className="flex justify-between border-t pt-4">

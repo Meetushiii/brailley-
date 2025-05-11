@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { useAudioContext } from '@/context/AudioContext';
-import { useAuth } from '@/App';
+import { useAuth } from '@/context/AuthContext';
 import { Eye, EyeOff, LogIn, Mail, Lock } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';

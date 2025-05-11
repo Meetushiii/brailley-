@@ -145,7 +145,7 @@ const Home = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div>
             <h3 className="text-xl font-bold mb-2">Multi-Sensory Learning</h3>
-            <p>Our platform combines visual, auditory, and tactile learning methods to create a comprehensive educational experience.</p>
+            <p>Our platform combines visual, auditory, and tactile learning methods to create a comprehensive educational experience for visually impaired individuals.</p>
           </div>
           <div>
             <h3 className="text-xl font-bold mb-2">Accessibility First</h3>

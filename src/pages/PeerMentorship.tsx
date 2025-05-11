@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -9,7 +10,7 @@ import { useAudioContext } from '@/context/AudioContext';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Users, MessageSquare, Search, Lightbulb, Calendar, ArrowRight, 
-  Loader2, Share, UserCheck, Info, Phone, Save, Edit
+  Loader2, Share, UserCheck, Info, Phone, Save, Edit, Trash2
 } from 'lucide-react';
 import { useMentorshipService, Mentor, SkillCategory, MentorshipEvent, UserProfile } from '../services/mentorshipService';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -47,7 +48,7 @@ const PeerMentorship = () => {
     queryFn: () => mentorshipService.getEvents(),
   });
   
-  const { data: userProfile, isLoading: isProfileLoading } = useQuery({
+  const { data: userProfile, isLoading: isProfileLoading, refetch: refetchProfile } = useQuery({
     queryKey: ['userProfile'],
     queryFn: () => mentorshipService.getUserProfile(),
   });
@@ -84,10 +85,29 @@ const PeerMentorship = () => {
     }
   });
   
+  // Clear profile mutation
+  const clearProfileMutation = useMutation({
+    mutationFn: () => mentorshipService.clearUserProfile(),
+    onSuccess: (data) => {
+      if (data.success) {
+        queryClient.invalidateQueries({ queryKey: ['userProfile'] });
+        setUserName('Guest User');
+        setUserSkills([]);
+        setUserGoals([]);
+        toast({
+          title: "Profile Cleared",
+          description: "Your profile has been reset.",
+        });
+        playSound('success');
+      }
+    }
+  });
+  
   // Mentorship request mutation
   const requestMentorshipMutation = useMutation({
     mutationFn: (mentorId: number) => mentorshipService.requestMentorship(mentorId),
     onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['userProfile'] });
       toast({
         title: "Request Sent!",
         description: data.message,
@@ -100,6 +120,7 @@ const PeerMentorship = () => {
   const registerEventMutation = useMutation({
     mutationFn: (eventId: number) => mentorshipService.registerForEvent(eventId),
     onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['userProfile'] });
       toast({
         title: "Registered!",
         description: data.message,
@@ -131,7 +152,8 @@ const PeerMentorship = () => {
     const profileData = {
       name: userName,
       skills: userSkills,
-      goals: userGoals
+      goals: userGoals,
+      isActive: true
     };
     
     console.log("Saving profile data:", profileData);
@@ -139,8 +161,23 @@ const PeerMentorship = () => {
     setIsEditingProfile(false);
   };
   
+  // Clear profile
+  const clearProfile = () => {
+    if (window.confirm('Are you sure you want to clear your profile? This action cannot be undone.')) {
+      clearProfileMutation.mutate();
+    }
+  };
+  
   // Handle contact mentor
   const handleContactMentor = (mentor: Mentor) => {
+    if (userName === 'Guest User') {
+      toast({
+        title: "Profile Required",
+        description: "Please create your profile before requesting mentorship.",
+        variant: "destructive"
+      });
+      return;
+    }
     requestMentorshipMutation.mutate(mentor.id);
     speak(`Your mentorship request was sent to ${mentor.name}.`);
   };
@@ -156,6 +193,14 @@ const PeerMentorship = () => {
   
   // Handle event registration
   const handleEventRegistration = (event: MentorshipEvent) => {
+    if (userName === 'Guest User') {
+      toast({
+        title: "Profile Required",
+        description: "Please create your profile before registering for events.",
+        variant: "destructive"
+      });
+      return;
+    }
     registerEventMutation.mutate(event.id);
     speak(`You've successfully registered for ${event.title}.`);
   };
@@ -196,51 +241,120 @@ const PeerMentorship = () => {
   // Add user skill
   const addUserSkill = (skill: string) => {
     if (!userSkills.includes(skill)) {
-      setUserSkills([...userSkills, skill]);
+      const newSkills = [...userSkills, skill];
+      setUserSkills(newSkills);
+      // Auto-save the profile when adding skills
+      if (userName !== 'Guest User') {
+        updateProfileMutation.mutate({
+          name: userName,
+          skills: newSkills,
+          goals: userGoals,
+          isActive: true
+        });
+      }
     }
   };
 
   // Add custom user skill
   const handleAddCustomSkill = () => {
     if (newSkill && !userSkills.includes(newSkill)) {
-      setUserSkills([...userSkills, newSkill]);
+      const newSkills = [...userSkills, newSkill];
+      setUserSkills(newSkills);
       setNewSkill('');
+      
+      // Auto-save the profile when adding skills
+      if (userName !== 'Guest User') {
+        updateProfileMutation.mutate({
+          name: userName,
+          skills: newSkills,
+          goals: userGoals,
+          isActive: true
+        });
+      }
     }
   };
 
   // Add custom user goal
   const handleAddCustomGoal = () => {
     if (newGoal && !userGoals.includes(newGoal)) {
-      setUserGoals([...userGoals, newGoal]);
+      const newGoals = [...userGoals, newGoal];
+      setUserGoals(newGoals);
       setNewGoal('');
+      
+      // Auto-save the profile when adding goals
+      if (userName !== 'Guest User') {
+        updateProfileMutation.mutate({
+          name: userName,
+          skills: userSkills,
+          goals: newGoals,
+          isActive: true
+        });
+      }
     }
   };
 
   // Add user goal
   const addUserGoal = (goal: string) => {
     if (!userGoals.includes(goal)) {
-      setUserGoals([...userGoals, goal]);
+      const newGoals = [...userGoals, goal];
+      setUserGoals(newGoals);
+      
+      // Auto-save the profile when adding goals
+      if (userName !== 'Guest User') {
+        updateProfileMutation.mutate({
+          name: userName,
+          skills: userSkills,
+          goals: newGoals,
+          isActive: true
+        });
+      }
     }
   };
 
   // Remove user skill
   const removeUserSkill = (skill: string) => {
-    setUserSkills(userSkills.filter(s => s !== skill));
+    const newSkills = userSkills.filter(s => s !== skill);
+    setUserSkills(newSkills);
+    
+    // Auto-save the profile when removing skills
+    if (userName !== 'Guest User') {
+      updateProfileMutation.mutate({
+        name: userName,
+        skills: newSkills,
+        goals: userGoals,
+        isActive: true
+      });
+    }
   };
 
   // Remove user goal
   const removeUserGoal = (goal: string) => {
-    setUserGoals(userGoals.filter(g => g !== goal));
+    const newGoals = userGoals.filter(g => g !== goal);
+    setUserGoals(newGoals);
+    
+    // Auto-save the profile when removing goals
+    if (userName !== 'Guest User') {
+      updateProfileMutation.mutate({
+        name: userName,
+        skills: userSkills,
+        goals: newGoals,
+        isActive: true
+      });
+    }
   };
   
   // Autosave when editing is turned off
   useEffect(() => {
-    if (!isEditingProfile && userName.trim() !== '' && (userProfile?.name !== userName || 
-        JSON.stringify(userProfile?.skills) !== JSON.stringify(userSkills) || 
-        JSON.stringify(userProfile?.goals) !== JSON.stringify(userGoals))) {
+    if (!isEditingProfile && userName.trim() !== '' && userName !== 'Guest User') {
       saveProfile();
     }
   }, [isEditingProfile]);
+
+  // Check if profile exists on initial load
+  useEffect(() => {
+    // Force refetch on mount to ensure we have the latest data
+    refetchProfile();
+  }, []);
   
   return (
     <div className="container mx-auto px-4 py-8">
@@ -296,16 +410,31 @@ const PeerMentorship = () => {
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <span>Your Profile</span>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setIsEditingProfile(!isEditingProfile)}
-              >
-                {isEditingProfile ? <Save size={18} /> : <Edit size={18} />}
-                {isEditingProfile ? ' Save Mode' : ' Edit Mode'}
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setIsEditingProfile(!isEditingProfile)}
+                >
+                  {isEditingProfile ? <Save size={18} /> : <Edit size={18} />}
+                  {isEditingProfile ? ' Save Mode' : ' Edit Mode'}
+                </Button>
+                {userProfile?.isActive && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearProfile}
+                  >
+                    <Trash2 size={18} className="text-red-500" />
+                  </Button>
+                )}
+              </div>
             </CardTitle>
-            <CardDescription>Complete your profile to unlock all features</CardDescription>
+            <CardDescription>
+              {userProfile?.isActive 
+                ? "Your permanent profile - changes are automatically saved" 
+                : "Complete your profile to unlock all features"}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {isProfileLoading ? (
@@ -354,6 +483,11 @@ const PeerMentorship = () => {
                         placeholder="Add a new skill" 
                         value={newSkill}
                         onChange={(e) => setNewSkill(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && newSkill.trim()) {
+                            handleAddCustomSkill();
+                          }
+                        }}
                       />
                       <Button 
                         size="sm" 
@@ -390,6 +524,11 @@ const PeerMentorship = () => {
                         placeholder="Add a new goal" 
                         value={newGoal}
                         onChange={(e) => setNewGoal(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && newGoal.trim()) {
+                            handleAddCustomGoal();
+                          }
+                        }}
                       />
                       <Button 
                         size="sm" 
@@ -408,14 +547,14 @@ const PeerMentorship = () => {
             <Button 
               className="w-full" 
               onClick={saveProfile}
-              disabled={updateProfileMutation.isPending}
+              disabled={updateProfileMutation.isPending || userName.trim() === ''}
             >
               {updateProfileMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Saving...
                 </>
-              ) : 'Save Profile'}
+              ) : userProfile?.isActive ? 'Update Profile' : 'Save Profile'}
             </Button>
           </CardFooter>
         </Card>

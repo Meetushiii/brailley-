@@ -1,3 +1,4 @@
+
 import { useToast } from "@/hooks/use-toast";
 
 // Mock API for now - would be replaced with actual backend calls
@@ -32,6 +33,7 @@ export interface UserProfile {
   goals: string[];
   joinedEvents?: number[];
   connectedMentors?: number[];
+  isActive?: boolean;
 }
 
 // Local storage keys
@@ -197,10 +199,18 @@ export const mentorshipService = {
           skills: [],
           goals: [],
           joinedEvents: [],
-          connectedMentors: []
+          connectedMentors: [],
+          isActive: false
         };
         
         const storedProfile = getStorageItem<UserProfile>(PROFILE_STORAGE_KEY, defaultProfile);
+        
+        // Set profile active
+        if (!storedProfile.isActive && storedProfile.name !== 'Guest User') {
+          storedProfile.isActive = true;
+          setStorageItem(PROFILE_STORAGE_KEY, storedProfile);
+        }
+        
         resolve(storedProfile);
       }, 300);
     });
@@ -211,10 +221,22 @@ export const mentorshipService = {
     return new Promise((resolve) => {
       setTimeout(() => {
         try {
-          const mentors = getStorageItem<number[]>(MENTORS_STORAGE_KEY, []);
-          if (!mentors.includes(mentorId)) {
-            mentors.push(mentorId);
-            setStorageItem(MENTORS_STORAGE_KEY, mentors);
+          const userProfile = getStorageItem<UserProfile>(PROFILE_STORAGE_KEY, {
+            name: 'Guest User',
+            skills: [],
+            goals: [],
+            joinedEvents: [],
+            connectedMentors: []
+          });
+          
+          // Add to connected mentors if not already connected
+          if (!userProfile.connectedMentors) {
+            userProfile.connectedMentors = [];
+          }
+          
+          if (!userProfile.connectedMentors.includes(mentorId)) {
+            userProfile.connectedMentors.push(mentorId);
+            setStorageItem(PROFILE_STORAGE_KEY, userProfile);
           }
           
           resolve({
@@ -237,10 +259,22 @@ export const mentorshipService = {
     return new Promise((resolve) => {
       setTimeout(() => {
         try {
-          const events = getStorageItem<number[]>(EVENTS_STORAGE_KEY, []);
-          if (!events.includes(eventId)) {
-            events.push(eventId);
-            setStorageItem(EVENTS_STORAGE_KEY, events);
+          const userProfile = getStorageItem<UserProfile>(PROFILE_STORAGE_KEY, {
+            name: 'Guest User',
+            skills: [],
+            goals: [],
+            joinedEvents: [],
+            connectedMentors: []
+          });
+          
+          // Add to joined events if not already registered
+          if (!userProfile.joinedEvents) {
+            userProfile.joinedEvents = [];
+          }
+          
+          if (!userProfile.joinedEvents.includes(eventId)) {
+            userProfile.joinedEvents.push(eventId);
+            setStorageItem(PROFILE_STORAGE_KEY, userProfile);
           }
           
           resolve({
@@ -258,7 +292,7 @@ export const mentorshipService = {
     });
   },
 
-  // Update user profile - now with improved localStorage handling
+  // Update user profile - now with improved localStorage handling and permanent saving
   updateProfile: async (profileData: UserProfile): Promise<{success: boolean, message: string}> => {
     return new Promise((resolve) => {
       setTimeout(() => {
@@ -269,25 +303,28 @@ export const mentorshipService = {
             skills: [],
             goals: [],
             joinedEvents: [],
-            connectedMentors: []
+            connectedMentors: [],
+            isActive: false
           });
           
           // Merge the existing profile with the new data
           const mergedProfile = {
             ...existingProfile,
             ...profileData,
-            // Ensure these arrays are preserved if they exist in the existing profile
+            // Preserve these arrays if they exist in the existing profile
             joinedEvents: existingProfile.joinedEvents || [],
-            connectedMentors: existingProfile.connectedMentors || []
+            connectedMentors: existingProfile.connectedMentors || [],
+            // Always set active to true when updating profile
+            isActive: true
           };
           
           // Save to local storage
           setStorageItem(PROFILE_STORAGE_KEY, mergedProfile);
-          console.log('Profile saved successfully:', mergedProfile);
+          console.log('Profile saved permanently to localStorage:', mergedProfile);
           
           resolve({
             success: true,
-            message: 'Your profile has been updated successfully.'
+            message: 'Your profile has been permanently saved.'
           });
         } catch (error) {
           console.error('Error updating profile:', error);
@@ -297,6 +334,30 @@ export const mentorshipService = {
           });
         }
       }, 700);
+    });
+  },
+  
+  // Clear user profile and data (for testing)
+  clearUserProfile: async (): Promise<{success: boolean, message: string}> => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        try {
+          localStorage.removeItem(PROFILE_STORAGE_KEY);
+          localStorage.removeItem(EVENTS_STORAGE_KEY);
+          localStorage.removeItem(MENTORS_STORAGE_KEY);
+          
+          resolve({
+            success: true,
+            message: 'Your profile has been cleared.'
+          });
+        } catch (error) {
+          console.error('Error clearing profile:', error);
+          resolve({
+            success: false,
+            message: 'An error occurred while clearing your profile.'
+          });
+        }
+      }, 300);
     });
   }
 };
@@ -344,7 +405,7 @@ export const useMentorshipService = () => {
         return await mentorshipService.getUserProfile();
       } catch (error: any) {
         handleError(error);
-        return { name: 'Guest User', skills: [], goals: [] };
+        return { name: 'Guest User', skills: [], goals: [], isActive: false };
       }
     },
     requestMentorship: async (mentorId: number) => {
@@ -369,6 +430,14 @@ export const useMentorshipService = () => {
       } catch (error: any) {
         handleError(error);
         return { success: false, message: 'Failed to update profile.' };
+      }
+    },
+    clearUserProfile: async () => {
+      try {
+        return await mentorshipService.clearUserProfile();
+      } catch (error: any) {
+        handleError(error);
+        return { success: false, message: 'Failed to clear profile.' };
       }
     }
   };

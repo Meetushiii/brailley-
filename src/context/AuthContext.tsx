@@ -26,10 +26,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = () => {
     setIsAuthenticated(true);
+    localStorage.setItem(AUTH_STORAGE_KEY, 'true');
   };
 
   const logout = () => {
     setIsAuthenticated(false);
+    localStorage.setItem(AUTH_STORAGE_KEY, 'false');
   };
 
   return (

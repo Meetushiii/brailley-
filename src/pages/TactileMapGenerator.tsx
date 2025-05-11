@@ -9,24 +9,12 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAudioContext } from '@/context/AudioContext';
 import { useToast } from '@/hooks/use-toast';
+import WorldMap from '@/components/WorldMap';
 import { 
   MapPin, Search, ArrowDown, ArrowUp, ArrowLeft, ArrowRight,
-  Headphones, Download, Plus, Minus
+  Headphones, Download, Plus, Minus, Map
 } from 'lucide-react';
 
-// Define map container styles
-const mapContainerStyle = {
-  width: '100%',
-  height: '400px'
-};
-
-// Initial center position
-const center = {
-  lat: 37.7749,
-  lng: -122.4194
-};
-
-// Replace the Google Maps with a static map for now
 const TactileMapGenerator = () => {
   const [address, setAddress] = useState('');
   const [searching, setSearching] = useState(false);
@@ -36,6 +24,7 @@ const TactileMapGenerator = () => {
   const [audioFeedback, setAudioFeedback] = useState(true);
   const [vibrationFeedback, setVibrationFeedback] = useState(true);
   const [mapMode, setMapMode] = useState<'standard' | 'highContrast' | 'braille'>('standard');
+  const [currentPlace, setCurrentPlace] = useState('');
   
   const { speak, playSound } = useAudioContext();
   const { toast } = useToast();
@@ -127,18 +116,8 @@ const TactileMapGenerator = () => {
   const announcePosition = () => {
     if (!mapGenerated) return;
     
-    // Simulate announcing the current position
-    const nearbyOptions = [
-      "Coffee Shop", "Bus Station", "Park", "Library", "Restaurant"
-    ];
-    
-    // 50% chance to find landmarks
-    if (Math.random() > 0.5) {
-      const randomLandmarks = nearbyOptions
-        .sort(() => 0.5 - Math.random())
-        .slice(0, Math.floor(Math.random() * 3) + 1);
-      
-      speak(`You are near: ${randomLandmarks.join(', ')}`);
+    if (currentPlace) {
+      speak(`You are at ${currentPlace}`);
     } else {
       speak(`You are at the center of the map.`);
     }
@@ -179,6 +158,13 @@ const TactileMapGenerator = () => {
     
     if (audioFeedback) {
       speak(`Zoom level ${newZoom}`);
+    }
+  };
+
+  const handlePlaceFound = (place: string) => {
+    setCurrentPlace(place);
+    if (audioFeedback) {
+      speak(`Selected location: ${place}`);
     }
   };
   
@@ -299,111 +285,76 @@ const TactileMapGenerator = () => {
               />
             </div>
             
-            {/* Map Display Area */}
+            {/* Map Display Area - Now using the WorldMap component */}
             <div 
-              className="w-full h-[400px] rounded-lg border border-gray-200 overflow-hidden focus:outline-none focus:ring-2 focus:ring-braille-blue focus:border-transparent flex items-center justify-center"
+              className="w-full h-[400px] rounded-lg border border-gray-200 overflow-hidden focus:outline-none focus:ring-2 focus:ring-braille-blue focus:border-transparent"
               tabIndex={0}
               onKeyDown={handleKeyNavigation}
             >
-              {mapGenerated ? (
-                <div 
-                  className={`w-full h-full relative ${mapMode === 'highContrast' ? 'bg-black' : 'bg-gray-100'}`}
-                >
-                  {/* Simulate map grid */}
-                  <div className="absolute inset-0 grid grid-cols-10 grid-rows-10">
-                    {Array(100).fill(0).map((_, i) => (
-                      <div 
-                        key={i}
-                        className={`border ${mapMode === 'highContrast' ? 'border-white' : 'border-gray-200'}`}
-                      />
-                    ))}
-                  </div>
-                  
-                  {/* Center marker */}
-                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                    <div className={`w-4 h-4 rounded-full bg-red-500 border-2 ${mapMode === 'highContrast' ? 'border-white' : 'border-white'}`}></div>
-                  </div>
-                  
-                  {/* POI markers - only if enabled */}
-                  {poiEnabled && (
-                    <>
-                      <div className="absolute top-1/4 left-1/3">
-                        <div className={`w-3 h-3 rounded-full ${mapMode === 'highContrast' ? 'bg-white' : 'bg-blue-500'}`}></div>
-                      </div>
-                      <div className="absolute top-2/3 left-1/4">
-                        <div className={`w-3 h-3 rounded-full ${mapMode === 'highContrast' ? 'bg-white' : 'bg-blue-500'}`}></div>
-                      </div>
-                      <div className="absolute top-1/3 left-3/4">
-                        <div className={`w-3 h-3 rounded-full ${mapMode === 'highContrast' ? 'bg-white' : 'bg-blue-500'}`}></div>
-                      </div>
-                      <div className="absolute top-3/4 right-1/4">
-                        <div className={`w-3 h-3 rounded-full ${mapMode === 'highContrast' ? 'bg-white' : 'bg-blue-500'}`}></div>
-                      </div>
-                      <div className="absolute bottom-1/4 right-1/3">
-                        <div className={`w-3 h-3 rounded-full ${mapMode === 'highContrast' ? 'bg-white' : 'bg-blue-500'}`}></div>
-                      </div>
-                    </>
-                  )}
-                </div>
+              {mapGenerated || true ? (
+                <WorldMap 
+                  mapMode={mapMode} 
+                  onPlaceFound={handlePlaceFound}
+                />
               ) : (
-                <div className="flex flex-col items-center justify-center">
-                  <MapPin className="text-gray-400 mb-2" size={40} />
-                  <p className="text-gray-400">Enter a location to generate a map</p>
+                <div className="w-full h-full flex items-center justify-center bg-gray-50">
+                  <div className="flex flex-col items-center justify-center">
+                    <Map className="text-gray-400 mb-2" size={40} />
+                    <p className="text-gray-400">Enter a location to generate a map</p>
+                  </div>
                 </div>
               )}
             </div>
             
             {/* Navigation Controls */}
-            {mapGenerated && (
-              <div className="flex flex-col items-center justify-center space-y-2">
-                <div>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => moveOnMap('up')}
-                    aria-label="Move up"
-                  >
-                    <ArrowUp size={16} />
-                  </Button>
-                </div>
-                <div className="flex space-x-2">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => moveOnMap('left')}
-                    aria-label="Move left"
-                  >
-                    <ArrowLeft size={16} />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={announcePosition}
-                    aria-label="Announce position"
-                  >
-                    <Headphones size={16} className="mr-2" />
-                    Where am I?
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => moveOnMap('right')}
-                    aria-label="Move right"
-                  >
-                    <ArrowRight size={16} />
-                  </Button>
-                </div>
-                <div>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => moveOnMap('down')}
-                    aria-label="Move down"
-                  >
-                    <ArrowDown size={16} />
-                  </Button>
-                </div>
+            <div className="flex flex-col items-center justify-center space-y-2">
+              <div>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => moveOnMap('up')}
+                  aria-label="Move up"
+                >
+                  <ArrowUp size={16} />
+                </Button>
               </div>
-            )}
+              <div className="flex space-x-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => moveOnMap('left')}
+                  aria-label="Move left"
+                >
+                  <ArrowLeft size={16} />
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={announcePosition}
+                  aria-label="Announce position"
+                >
+                  <Headphones size={16} className="mr-2" />
+                  Where am I?
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => moveOnMap('right')}
+                  aria-label="Move right"
+                >
+                  <ArrowRight size={16} />
+                </Button>
+              </div>
+              <div>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => moveOnMap('down')}
+                  aria-label="Move down"
+                >
+                  <ArrowDown size={16} />
+                </Button>
+              </div>
+            </div>
           </div>
         </CardContent>
         <CardFooter className="flex justify-between border-t pt-4">

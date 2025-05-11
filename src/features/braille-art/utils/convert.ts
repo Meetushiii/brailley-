@@ -28,6 +28,40 @@ export const convertGridToBraille = (grid: BrailleGrid): string => {
   return brailleText;
 };
 
+// Convert geographical data to braille representation
+export const convertMapDataToBraille = (data: any): string => {
+  // This is a simplified conversion - in a real implementation, 
+  // you would process GeoJSON or other map data
+  let brailleMap = '';
+  
+  // Example: Simple conversion of country names to braille
+  if (data && data.features) {
+    for (const feature of data.features) {
+      if (feature.properties && feature.properties.name) {
+        // In a real implementation, you would create a tactile map
+        // representation of the feature's geometry
+        const nameBraille = feature.properties.name
+          .toLowerCase()
+          .split('')
+          .map((char: string) => {
+            // Convert to braille unicode (simplified)
+            const code = char.charCodeAt(0);
+            if (code >= 97 && code <= 122) { // a-z
+              return String.fromCodePoint(0x2801 + (code - 97));
+            } else {
+              return char;
+            }
+          })
+          .join('');
+          
+        brailleMap += nameBraille + '\n';
+      }
+    }
+  }
+  
+  return brailleMap;
+};
+
 // Get statistics about the Braille art
 export const countActiveDots = (grid: BrailleGrid): number => {
   return grid.reduce((acc, row) => acc + row.filter(Boolean).length, 0);

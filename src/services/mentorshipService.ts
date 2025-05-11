@@ -1,4 +1,3 @@
-
 import { useToast } from "@/hooks/use-toast";
 
 // Mock API for now - would be replaced with actual backend calls
@@ -108,10 +107,18 @@ export const mentorshipService = {
             bio: 'Certified O&M specialist with 10 years of experience in schools.',
             available: true,
             avatarUrl: 'https://i.pravatar.cc/150?img=5'
-          }
+          },
+          // Important: Add the current user as a mentor if they have a saved profile
+          // This allows them to see themselves in the mentors list
+          ...getUserAsMentor()
         ]);
       }, 500);
     });
+  },
+
+  // New function: Get the current user as a mentor if they have a saved profile
+  getUserAsMentor: () => {
+    return getUserAsMentor();
   },
 
   // Get all skill categories
@@ -362,6 +369,35 @@ export const mentorshipService = {
   }
 };
 
+// Helper function to turn the current user profile into a mentor object
+// This allows the user to see themselves in the mentor list
+function getUserAsMentor(): Mentor[] {
+  try {
+    const userProfile = getStorageItem<UserProfile>(PROFILE_STORAGE_KEY, {
+      name: 'Guest User',
+      skills: [],
+      goals: [],
+      isActive: false
+    });
+
+    // Only add the user as a mentor if they have a saved and active profile
+    if (userProfile.isActive && userProfile.name !== 'Guest User') {
+      return [{
+        id: 999, // Use a high ID to avoid conflicts with mock mentors
+        name: userProfile.name + ' (You)',
+        expertise: userProfile.skills || [],
+        bio: 'This is your profile. Your skills are shown as your expertise.',
+        available: true,
+        avatarUrl: undefined // Could be added in future to let users set their avatar
+      }];
+    }
+    return [];
+  } catch (error) {
+    console.error('Error creating user mentor profile:', error);
+    return [];
+  }
+}
+
 // Custom hook to interact with the mentorship service
 export const useMentorshipService = () => {
   const { toast } = useToast();
@@ -379,6 +415,14 @@ export const useMentorshipService = () => {
     getMentors: async () => {
       try {
         return await mentorshipService.getMentors();
+      } catch (error: any) {
+        handleError(error);
+        return [];
+      }
+    },
+    getUserAsMentor: () => {
+      try {
+        return mentorshipService.getUserAsMentor();
       } catch (error: any) {
         handleError(error);
         return [];

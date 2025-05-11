@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -14,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useMentorshipService, Mentor, SkillCategory, MentorshipEvent, UserProfile } from '../services/mentorshipService';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/context/AuthContext';
 
 const PeerMentorship = () => {
   // State
@@ -31,11 +31,13 @@ const PeerMentorship = () => {
   const { toast } = useToast();
   const mentorshipService = useMentorshipService();
   const queryClient = useQueryClient();
+  const { isAuthenticated, login } = useAuth();
   
-  // Fetch data using React Query
-  const { data: mentors = [], isLoading: isMentorsLoading } = useQuery({
+  // Fetch data using React Query with shorter staletime to ensure fresh data
+  const { data: mentors = [], isLoading: isMentorsLoading, refetch: refetchMentors } = useQuery({
     queryKey: ['mentors'],
     queryFn: () => mentorshipService.getMentors(),
+    staleTime: 10000, // Refresh more frequently to see profile updates
   });
   
   const { data: skillCategories = [], isLoading: isSkillsLoading } = useQuery({
@@ -51,6 +53,7 @@ const PeerMentorship = () => {
   const { data: userProfile, isLoading: isProfileLoading, refetch: refetchProfile } = useQuery({
     queryKey: ['userProfile'],
     queryFn: () => mentorshipService.getUserProfile(),
+    staleTime: 5000, // Keep profile data fresh
   });
 
   // Update profile mutation with improved error handling
@@ -58,13 +61,24 @@ const PeerMentorship = () => {
     mutationFn: (profileData: UserProfile) => mentorshipService.updateProfile(profileData),
     onSuccess: (data) => {
       if (data.success) {
+        // Set user as authenticated when profile is saved
+        login();
+        
+        // Force refetch both profile and mentors to update user's mentor card
         queryClient.invalidateQueries({ queryKey: ['userProfile'] });
+        queryClient.invalidateQueries({ queryKey: ['mentors'] });
+        
         toast({
           title: "Profile Saved",
           description: "Your profile has been permanently saved.",
         });
         playSound('success');
         speak("Your profile has been saved and will be available when you return.");
+        
+        // Explicitly refetch mentors to ensure the user appears in the list
+        setTimeout(() => {
+          refetchMentors();
+        }, 500);
       } else {
         toast({
           title: "Update Warning",
@@ -91,6 +105,7 @@ const PeerMentorship = () => {
     onSuccess: (data) => {
       if (data.success) {
         queryClient.invalidateQueries({ queryKey: ['userProfile'] });
+        queryClient.invalidateQueries({ queryKey: ['mentors'] });
         setUserName('Guest User');
         setUserSkills([]);
         setUserGoals([]);
@@ -99,6 +114,11 @@ const PeerMentorship = () => {
           description: "Your profile has been reset.",
         });
         playSound('success');
+        
+        // Explicitly refetch mentors to ensure user is removed from the list
+        setTimeout(() => {
+          refetchMentors();
+        }, 500);
       }
     }
   });
@@ -350,10 +370,18 @@ const PeerMentorship = () => {
     }
   }, [isEditingProfile]);
 
-  // Check if profile exists on initial load
+  // Check if profile exists on initial load and force refetch to ensure latest data
   useEffect(() => {
     // Force refetch on mount to ensure we have the latest data
     refetchProfile();
+    refetchMentors();
+    
+    // Set up an interval to periodically refetch mentors to catch any changes
+    const interval = setInterval(() => {
+      refetchMentors();
+    }, 10000);
+    
+    return () => clearInterval(interval);
   }, []);
   
   return (
@@ -587,7 +615,7 @@ const PeerMentorship = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {filteredMentors.map(mentor => (
-                <Card key={mentor.id}>
+                <Card key={mentor.id} className={mentor.name.includes('(You)') ? "border-2 border-braille-blue" : ""}>
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-4">
@@ -632,6 +660,9 @@ const PeerMentorship = () => {
                             {skill}
                           </Badge>
                         ))}
+                        {mentor.expertise.length === 0 && (
+                          <span className="text-sm text-gray-500">No expertise listed</span>
+                        )}
                       </div>
                     </div>
                   </CardContent>
@@ -640,31 +671,33 @@ const PeerMentorship = () => {
                       variant="outline" 
                       size="sm" 
                       className="flex items-center gap-1"
-                      onClick={() => speak(`${mentor.name} is an expert in ${mentor.expertise.join(', ')}. ${mentor.bio}`)}
+                      onClick={() => speak(`${mentor.name} is ${mentor.expertise.length > 0 ? `an expert in ${mentor.expertise.join(', ')}` : 'still building expertise'}. ${mentor.bio}`)}
                     >
                       <Info size={16} />
                       Profile
                     </Button>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex items-center gap-1"
-                        disabled={!mentor.available}
-                      >
-                        <Phone size={16} />
-                        Call
-                      </Button>
-                      <Button 
-                        size="sm"
-                        className="flex items-center gap-1"
-                        disabled={!mentor.available || requestMentorshipMutation.isPending}
-                        onClick={() => handleContactMentor(mentor)}
-                      >
-                        <UserCheck size={16} />
-                        Request
-                      </Button>
-                    </div>
+                    {!mentor.name.includes('(You)') && (
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex items-center gap-1"
+                          disabled={!mentor.available}
+                        >
+                          <Phone size={16} />
+                          Call
+                        </Button>
+                        <Button 
+                          size="sm"
+                          className="flex items-center gap-1"
+                          disabled={!mentor.available || requestMentorshipMutation.isPending}
+                          onClick={() => handleContactMentor(mentor)}
+                        >
+                          <UserCheck size={16} />
+                          Request
+                        </Button>
+                      </div>
+                    )}
                   </CardFooter>
                 </Card>
               ))}
@@ -677,6 +710,7 @@ const PeerMentorship = () => {
             </div>
           )}
         </TabsContent>
+
         
         <TabsContent value="skills">
           {isSkillsLoading ? (

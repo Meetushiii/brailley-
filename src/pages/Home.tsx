@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { BookOpen, Mic, MessageSquare, MapPin, Users, Volume2, Edit, Book } from 'lucide-react';
@@ -10,17 +9,17 @@ import { textToBrailleDots } from '@/utils/brailleUtils';
 
 const Home = () => {
   const { speak } = useAudioContext();
-  const welcomeText = "Welcome to Braille Math Verse";
+  const welcomeText = "Welcome to Braillely";
   const brailleCells = textToBrailleDots(welcomeText.toLowerCase());
 
   useEffect(() => {
-    speak("Welcome to Braille Math Verse. Learn braille and mathematics through an interactive experience with advanced features including collaboration, AI tutoring, tactile maps, and more.");
+    speak("Welcome to Braillely. Learn braille and mathematics through an interactive experience with advanced features including collaboration, AI tutoring, tactile maps, and more.");
   }, [speak]);
 
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="text-center mb-12">
-        <h1 className="text-4xl font-bold text-braille-blue mb-4">Welcome to BrailleMathVerse</h1>
+        <h1 className="text-4xl font-bold text-braille-blue mb-4">Welcome to Braillely</h1>
         <p className="text-xl mb-6">Learn Braille and Mathematics through an interactive multi-sensory experience</p>
         
         <div className="flex justify-center mb-8 overflow-x-auto py-4">
@@ -150,7 +149,7 @@ const Home = () => {
       </div>
 
       <div className="mt-16 p-6 bg-braille-blue text-white rounded-lg">
-        <h2 className="text-2xl font-bold mb-4">Why BrailleMathVerse?</h2>
+        <h2 className="text-2xl font-bold mb-4">Why Braillely?</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div>
             <h3 className="text-xl font-bold mb-2">Multi-Sensory Learning</h3>

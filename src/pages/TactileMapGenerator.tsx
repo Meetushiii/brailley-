@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,27 +9,75 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAudioContext } from '@/context/AudioContext';
 import { useToast } from '@/hooks/use-toast';
-import { MapPin, Search, ArrowDown, ArrowUp, ArrowLeft, ArrowRight, Headphones, Download, Plus, Minus } from 'lucide-react';
+import { 
+  MapPin, Search, ArrowDown, ArrowUp, ArrowLeft, ArrowRight,
+  Headphones, Download, Plus, Minus
+} from 'lucide-react';
+import { GoogleMap, useJsApiLoader, Marker, Circle } from '@react-google-maps/api';
+
+// Define map container styles
+const mapContainerStyle = {
+  width: '100%',
+  height: '400px'
+};
+
+// Initial center position
+const center = {
+  lat: 37.7749,
+  lng: -122.4194
+};
+
+const mapOptions = {
+  disableDefaultUI: true,
+  zoomControl: false,
+  streetViewControl: false,
+  mapTypeControl: false,
+  fullscreenControl: false,
+  styles: [
+    {
+      featureType: 'all',
+      elementType: 'labels.text',
+      stylers: [{ visibility: 'on' }]
+    }
+  ]
+};
+
+// Fix the libraries type definition
+const libraries: ["places", "geometry"] = ["places", "geometry"];
 
 const TactileMapGenerator = () => {
+  // Google Maps API loader
+  const { isLoaded, loadError } = useJsApiLoader({
+    googleMapsApiKey: "AIzaSyBubaEt-Fr_KuVLHlmur6ru16GUNLJmE-0", // This is a development key
+    libraries,
+  });
+
   const [address, setAddress] = useState('');
   const [searching, setSearching] = useState(false);
   const [mapGenerated, setMapGenerated] = useState(false);
   const [currentLocation, setCurrentLocation] = useState({ x: 50, y: 50 });
-  const [zoomLevel, setZoomLevel] = useState(5);
+  const [mapCenter, setMapCenter] = useState(center);
+  const [zoomLevel, setZoomLevel] = useState(12);
   const [poiEnabled, setPoiEnabled] = useState(true);
   const [audioFeedback, setAudioFeedback] = useState(true);
   const [vibrationFeedback, setVibrationFeedback] = useState(true);
   const [mapMode, setMapMode] = useState<'standard' | 'highContrast' | 'braille'>('standard');
-  const [landmarks, setLandmarks] = useState<{id: number, name: string, type: string, x: number, y: number}[]>([]);
-  
-  const mapRef = useRef<HTMLDivElement>(null);
+  const [landmarks, setLandmarks] = useState<{id: number, name: string, type: string, position: {lat: number, lng: number}}[]>([]);
+  const [mapKey, setMapKey] = useState(Date.now());
+
+  // Fix the map reference type
+  const mapRef = useRef<google.maps.Map | null>(null);
   const { speak, playSound } = useAudioContext();
   const { toast } = useToast();
-  
-  // In a real app, this would connect to a mapping API
+
+  // Save map instance reference  
+  const onMapLoad = useCallback((map: google.maps.Map) => {
+    mapRef.current = map;
+  }, []);
+
+  // Geocode the address and center the map
   const generateMap = () => {
-    if (!address.trim()) {
+    if (!isLoaded || !address.trim()) {
       toast({
         variant: "destructive",
         title: "Address required",
@@ -40,62 +88,137 @@ const TactileMapGenerator = () => {
     
     setSearching(true);
     
-    // Simulate API call delay
-    setTimeout(() => {
+    // Use Google Maps Geocoding service
+    const geocoder = new google.maps.Geocoder();
+    geocoder.geocode({ address }, (results, status) => {
+      if (status === google.maps.GeocoderStatus.OK && results && results[0]) {
+        const location = results[0].geometry.location;
+        const newCenter = {
+          lat: location.lat(),
+          lng: location.lng()
+        };
+        
+        setMapCenter(newCenter);
+        setMapGenerated(true);
+        
+        // Generate POIs around the area
+        const newLandmarks = [
+          { 
+            id: 1, 
+            name: "Coffee Shop", 
+            type: "amenity", 
+            position: {
+              lat: newCenter.lat + 0.003,
+              lng: newCenter.lng - 0.002
+            }
+          },
+          { 
+            id: 2, 
+            name: "Bus Station", 
+            type: "transit", 
+            position: {
+              lat: newCenter.lat - 0.002,
+              lng: newCenter.lng + 0.003
+            }
+          },
+          { 
+            id: 3, 
+            name: "Park", 
+            type: "recreation", 
+            position: {
+              lat: newCenter.lat + 0.001,
+              lng: newCenter.lng + 0.004
+            }
+          },
+          { 
+            id: 4, 
+            name: "Library", 
+            type: "education", 
+            position: {
+              lat: newCenter.lat - 0.004,
+              lng: newCenter.lng - 0.001
+            }
+          },
+          { 
+            id: 5, 
+            name: "Restaurant", 
+            type: "food", 
+            position: {
+              lat: newCenter.lat - 0.0005,
+              lng: newCenter.lng - 0.005
+            }
+          }
+        ];
+        
+        setLandmarks(newLandmarks);
+        setMapKey(Date.now()); // Force map rerender
+        
+        speak(`Map generated for ${results[0].formatted_address}. Use arrow keys to explore. 5 points of interest found.`);
+        toast({
+          title: "Map generated",
+          description: `Tactile map created for ${results[0].formatted_address}`,
+        });
+        playSound('success');
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Location not found",
+          description: "Could not find the specified location.",
+        });
+        speak("Location not found. Please try a different address.");
+      }
+      
       setSearching(false);
-      setMapGenerated(true);
-      
-      // Generate random POIs for demo purposes
-      const newLandmarks = [
-        { id: 1, name: "Coffee Shop", type: "amenity", x: 30, y: 40 },
-        { id: 2, name: "Bus Station", type: "transit", x: 60, y: 30 },
-        { id: 3, name: "Park", type: "recreation", x: 70, y: 60 },
-        { id: 4, name: "Library", type: "education", x: 20, y: 70 },
-        { id: 5, name: "Restaurant", type: "food", x: 55, y: 75 }
-      ];
-      
-      setLandmarks(newLandmarks);
-      
-      speak(`Map generated for ${address}. Use arrow keys to explore. 5 points of interest found.`);
-      toast({
-        title: "Map generated",
-        description: `Tactile map created for ${address}`,
-      });
-      playSound('success');
-    }, 1500);
+    });
   };
   
+  // Handle arrow key navigation on the map
   const moveOnMap = (direction: 'up' | 'down' | 'left' | 'right') => {
-    if (!mapGenerated) return;
+    if (!mapGenerated || !mapRef.current) return;
     
-    const step = 5;
-    let newX = currentLocation.x;
-    let newY = currentLocation.y;
+    const map = mapRef.current;
+    const currentCenter = map.getCenter();
+    if (!currentCenter) return;
+    
+    const lat = currentCenter.lat();
+    const lng = currentCenter.lng();
+    const latOffset = 0.002;
+    const lngOffset = 0.002;
+    
+    let newLat = lat;
+    let newLng = lng;
     
     switch (direction) {
       case 'up':
-        newY = Math.max(0, currentLocation.y - step);
+        newLat += latOffset;
         break;
       case 'down':
-        newY = Math.min(100, currentLocation.y + step);
+        newLat -= latOffset;
         break;
       case 'left':
-        newX = Math.max(0, currentLocation.x - step);
+        newLng -= lngOffset;
         break;
       case 'right':
-        newX = Math.min(100, currentLocation.x + step);
+        newLng += lngOffset;
         break;
     }
     
-    setCurrentLocation({ x: newX, y: newY });
+    const newCenter = new google.maps.LatLng(newLat, newLng);
+    map.panTo(newCenter);
     
-    // Check if near any landmarks
+    // Find nearby landmarks
     const nearbyLandmark = landmarks.find(landmark => {
-      const distance = Math.sqrt(
-        Math.pow(landmark.x - newX, 2) + 
-        Math.pow(landmark.y - newY, 2)
+      const landmarkLatLng = new google.maps.LatLng(
+        landmark.position.lat,
+        landmark.position.lng
       );
-      return distance < 10; // Within 10 units
+      
+      const distance = google.maps.geometry.spherical.computeDistanceBetween(
+        newCenter,
+        landmarkLatLng
+      );
+      
+      return distance < 200; // Within 200 meters
     });
     
     if (nearbyLandmark) {
@@ -143,26 +266,61 @@ const TactileMapGenerator = () => {
   };
   
   const announcePosition = () => {
-    if (!mapGenerated) return;
+    if (!mapGenerated || !mapRef.current) return;
+    
+    const map = mapRef.current;
+    const currentCenter = map.getCenter();
+    if (!currentCenter) return;
     
     // Find nearby landmarks
     const nearby = landmarks.filter(landmark => {
-      const distance = Math.sqrt(
-        Math.pow(landmark.x - currentLocation.x, 2) + 
-        Math.pow(landmark.y - currentLocation.y, 2)
+      const landmarkLatLng = new google.maps.LatLng(
+        landmark.position.lat,
+        landmark.position.lng
       );
-      return distance < 15; // Within 15 units
+      
+      const currentLatLng = new google.maps.LatLng(
+        currentCenter.lat(),
+        currentCenter.lng()
+      );
+      
+      const distance = google.maps.geometry.spherical.computeDistanceBetween(
+        currentLatLng,
+        landmarkLatLng
+      );
+      
+      return distance < 300; // Within 300 meters
     });
     
     if (nearby.length > 0) {
       speak(`You are near: ${nearby.map(l => l.name).join(', ')}`);
     } else {
-      speak(`You are at position ${Math.round(currentLocation.x)}, ${Math.round(currentLocation.y)} on the map.`);
+      speak(`You are at position ${currentCenter.lat().toFixed(4)}, ${currentCenter.lng().toFixed(4)} on the map.`);
     }
   };
   
   const toggleMapMode = (mode: 'standard' | 'highContrast' | 'braille') => {
     setMapMode(mode);
+    
+    // Apply different map styles based on mode
+    if (mapRef.current) {
+      if (mode === 'highContrast') {
+        mapRef.current.setOptions({
+          styles: [
+            { elementType: "geometry", stylers: [{ color: "#000000" }] },
+            { elementType: "labels.text.fill", stylers: [{ color: "#ffffff" }] },
+            { elementType: "labels.text.stroke", stylers: [{ color: "#000000" }] },
+            { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
+            { featureType: "water", elementType: "geometry", stylers: [{ color: "#0f0f70" }] }
+          ]
+        });
+      } else {
+        mapRef.current.setOptions({
+          styles: []
+        });
+      }
+    }
+    
     if (mapGenerated) {
       speak(`Map mode changed to ${mode}`);
       playSound('click');
@@ -181,18 +339,44 @@ const TactileMapGenerator = () => {
   };
   
   const zoomIn = () => {
-    setZoomLevel(Math.min(10, zoomLevel + 1));
-    if (audioFeedback) {
-      speak(`Zoom level ${zoomLevel + 1}`);
+    if (mapRef.current) {
+      const newZoom = mapRef.current.getZoom() + 1;
+      mapRef.current.setZoom(newZoom);
+      setZoomLevel(newZoom);
+      
+      if (audioFeedback) {
+        speak(`Zoom level ${newZoom}`);
+      }
     }
   };
   
   const zoomOut = () => {
-    setZoomLevel(Math.max(1, zoomLevel - 1));
-    if (audioFeedback) {
-      speak(`Zoom level ${zoomLevel - 1}`);
+    if (mapRef.current) {
+      const newZoom = mapRef.current.getZoom() - 1;
+      mapRef.current.setZoom(newZoom);
+      setZoomLevel(newZoom);
+      
+      if (audioFeedback) {
+        speak(`Zoom level ${newZoom}`);
+      }
     }
   };
+
+  // Map render status handling
+  if (loadError) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center">
+              <h2 className="text-xl font-bold text-red-600 mb-2">Error Loading Maps</h2>
+              <p>Unable to load Google Maps. Please check your connection or API key.</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
   
   return (
     <div className="container mx-auto px-4 py-8">
@@ -212,9 +396,10 @@ const TactileMapGenerator = () => {
                   value={address}
                   onChange={e => setAddress(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && generateMap()}
+                  aria-label="Enter location"
                 />
               </div>
-              <Button onClick={generateMap} disabled={searching || !address.trim()}>
+              <Button onClick={generateMap} disabled={searching || !address.trim() || !isLoaded}>
                 {searching ? "Searching..." : (
                   <>
                     <Search size={16} className="mr-2" />
@@ -284,7 +469,7 @@ const TactileMapGenerator = () => {
                     variant="outline" 
                     size="icon" 
                     onClick={zoomOut} 
-                    disabled={zoomLevel <= 1}
+                    disabled={!mapGenerated}
                   >
                     <Minus size={16} />
                   </Button>
@@ -292,7 +477,7 @@ const TactileMapGenerator = () => {
                     variant="outline" 
                     size="icon" 
                     onClick={zoomIn} 
-                    disabled={zoomLevel >= 10}
+                    disabled={!mapGenerated}
                   >
                     <Plus size={16} />
                   </Button>
@@ -300,78 +485,79 @@ const TactileMapGenerator = () => {
               </div>
               <Slider
                 value={[zoomLevel]}
-                min={1}
-                max={10}
+                min={8}
+                max={20}
                 step={1}
-                onValueChange={(v) => setZoomLevel(v[0])}
+                onValueChange={(v) => {
+                  setZoomLevel(v[0]);
+                  if (mapRef.current) {
+                    mapRef.current.setZoom(v[0]);
+                  }
+                }}
+                disabled={!mapGenerated}
               />
             </div>
             
-            {/* Map Display Area */}
+            {/* Google Maps Component */}
             <div 
-              ref={mapRef}
-              className={`relative w-full h-80 rounded-lg border border-gray-200 overflow-hidden focus:outline-none focus:ring-2 focus:ring-braille-blue focus:border-transparent ${
-                mapGenerated ? 'bg-white' : 'bg-gray-100'
-              }`}
+              className="w-full rounded-lg border border-gray-200 overflow-hidden focus:outline-none focus:ring-2 focus:ring-braille-blue focus:border-transparent"
               tabIndex={0}
               onKeyDown={handleKeyNavigation}
-              style={{
-                backgroundColor: mapMode === 'highContrast' ? '#000' : '#fff',
-                cursor: mapGenerated ? 'crosshair' : 'default'
-              }}
             >
-              {mapGenerated ? (
-                <>
-                  {landmarks.map(landmark => (
-                    <div
+              {isLoaded ? (
+                <GoogleMap
+                  key={mapKey}
+                  mapContainerStyle={mapContainerStyle}
+                  center={mapCenter}
+                  zoom={zoomLevel}
+                  options={mapOptions}
+                  onLoad={onMapLoad}
+                >
+                  {/* User location marker */}
+                  <Marker
+                    position={mapCenter}
+                    icon={{
+                      path: google.maps.SymbolPath.CIRCLE,
+                      scale: 10,
+                      fillColor: "#FF0000",
+                      fillOpacity: 1,
+                      strokeWeight: 2,
+                      strokeColor: "#FFFFFF",
+                    }}
+                  />
+                  
+                  {/* Landmark markers */}
+                  {poiEnabled && landmarks.map(landmark => (
+                    <Marker
                       key={landmark.id}
-                      className={`absolute rounded-full w-4 h-4 flex items-center justify-center ${
-                        mapMode === 'highContrast' 
-                          ? 'bg-yellow-400 text-black' 
-                          : 'bg-braille-blue text-white'
-                      }`}
-                      style={{
-                        left: `${landmark.x}%`,
-                        top: `${landmark.y}%`,
-                        transform: 'translate(-50%, -50%)'
+                      position={landmark.position}
+                      title={landmark.name}
+                      onClick={() => {
+                        speak(landmark.name);
+                        toast({
+                          title: landmark.name,
+                          description: `Type: ${landmark.type}`,
+                        });
                       }}
-                      aria-label={landmark.name}
-                    >
-                      {mapMode === 'braille' ? '⠏' : ''}
-                    </div>
+                    />
                   ))}
                   
-                  {/* User Position Indicator */}
-                  <div
-                    className={`absolute rounded-full w-6 h-6 flex items-center justify-center animate-pulse ${
-                      mapMode === 'highContrast' 
-                        ? 'bg-red-500 text-white' 
-                        : 'bg-red-500 text-white'
-                    }`}
-                    style={{
-                      left: `${currentLocation.x}%`,
-                      top: `${currentLocation.y}%`,
-                      transform: 'translate(-50%, -50%)',
-                      zIndex: 10
+                  {/* User interaction radius */}
+                  <Circle
+                    center={mapCenter}
+                    radius={200}
+                    options={{
+                      strokeColor: '#FF0000',
+                      strokeOpacity: 0.5,
+                      strokeWeight: 2,
+                      fillColor: '#FF0000',
+                      fillOpacity: 0.1,
                     }}
-                  >
-                    <MapPin size={16} />
-                  </div>
-                  
-                  {/* Street Grid Overlay (simplified) */}
-                  <div className={`absolute inset-0 ${
-                    mapMode === 'highContrast' ? 'opacity-50' : 'opacity-30'
-                  }`}>
-                    <div className="grid grid-cols-10 grid-rows-10 h-full w-full">
-                      {Array(10).fill(0).map((_, i) => (
-                        <div key={i} className="border-t border-r border-gray-400" />
-                      ))}
-                    </div>
-                  </div>
-                </>
+                  />
+                </GoogleMap>
               ) : (
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-gray-400">Enter an address and generate a map</p>
+                <div className="flex items-center justify-center h-80 bg-gray-100">
+                  <p className="text-gray-400">Loading Google Maps...</p>
                 </div>
               )}
             </div>

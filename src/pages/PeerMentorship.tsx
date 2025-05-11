@@ -9,11 +9,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAudioContext } from '@/context/AudioContext';
 import { useToast } from '@/hooks/use-toast';
 import { 
-  Users, MessageSquare, Search, Book, Lightbulb, Calendar, ArrowRight, 
-  Loader2, Share, UserCheck, Info, Phone
+  Users, MessageSquare, Search, Lightbulb, Calendar, ArrowRight, 
+  Loader2, Share, UserCheck, Info, Phone, Save, Edit
 } from 'lucide-react';
-import { useMentorshipService, Mentor, SkillCategory, MentorshipEvent } from '../services/mentorshipService';
-import { useQuery } from '@tanstack/react-query';
+import { useMentorshipService, Mentor, SkillCategory, MentorshipEvent, UserProfile } from '../services/mentorshipService';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const PeerMentorship = () => {
   // State
@@ -22,11 +22,15 @@ const PeerMentorship = () => {
   const [userName, setUserName] = useState('Guest User');
   const [userSkills, setUserSkills] = useState<string[]>([]);
   const [userGoals, setUserGoals] = useState<string[]>([]);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [newSkill, setNewSkill] = useState('');
+  const [newGoal, setNewGoal] = useState('');
   
   // Hooks
   const { speak, playSound } = useAudioContext();
   const { toast } = useToast();
   const mentorshipService = useMentorshipService();
+  const queryClient = useQueryClient();
   
   // Fetch data using React Query
   const { data: mentors = [], isLoading: isMentorsLoading } = useQuery({
@@ -44,20 +48,65 @@ const PeerMentorship = () => {
     queryFn: () => mentorshipService.getEvents(),
   });
   
-  // Load user profile from local storage
-  useEffect(() => {
-    const savedProfile = localStorage.getItem('user-profile');
-    if (savedProfile) {
-      try {
-        const profile = JSON.parse(savedProfile);
-        setUserName(profile.name || 'Guest User');
-        setUserSkills(profile.skills || []);
-        setUserGoals(profile.goals || []);
-      } catch (error) {
-        console.error('Error loading profile:', error);
-      }
+  const { data: userProfile, isLoading: isProfileLoading } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: () => mentorshipService.getUserProfile(),
+  });
+
+  // Update profile mutation
+  const updateProfileMutation = useMutation({
+    mutationFn: (profileData: UserProfile) => mentorshipService.updateProfile(profileData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['userProfile'] });
+      toast({
+        title: "Profile Updated",
+        description: "Your profile has been saved successfully.",
+      });
+      playSound('success');
+      speak("Your profile has been updated successfully.");
+    },
+    onError: () => {
+      toast({
+        title: "Update Failed",
+        description: "Failed to save your profile.",
+        variant: "destructive"
+      });
+      playSound('error');
     }
-  }, []);
+  });
+  
+  // Mentorship request mutation
+  const requestMentorshipMutation = useMutation({
+    mutationFn: (mentorId: number) => mentorshipService.requestMentorship(mentorId),
+    onSuccess: (data) => {
+      toast({
+        title: "Request Sent!",
+        description: data.message,
+      });
+      playSound('success');
+    }
+  });
+  
+  // Event registration mutation
+  const registerEventMutation = useMutation({
+    mutationFn: (eventId: number) => mentorshipService.registerForEvent(eventId),
+    onSuccess: (data) => {
+      toast({
+        title: "Registered!",
+        description: data.message,
+      });
+      playSound('success');
+    }
+  });
+  
+  // Load user profile from query
+  useEffect(() => {
+    if (userProfile) {
+      setUserName(userProfile.name || 'Guest User');
+      setUserSkills(userProfile.skills || []);
+      setUserGoals(userProfile.goals || []);
+    }
+  }, [userProfile]);
   
   // Save profile
   const saveProfile = async () => {
@@ -67,39 +116,14 @@ const PeerMentorship = () => {
       goals: userGoals
     };
     
-    // Save to local storage
-    localStorage.setItem('user-profile', JSON.stringify(profileData));
-    
-    // Update on backend
-    const result = await mentorshipService.updateProfile(profileData);
-    
-    if (result.success) {
-      toast({
-        title: "Profile Updated",
-        description: result.message,
-      });
-      speak("Your profile has been updated successfully.");
-      playSound('success');
-    }
+    updateProfileMutation.mutate(profileData);
+    setIsEditingProfile(false);
   };
   
   // Handle contact mentor
-  const handleContactMentor = async (mentor: Mentor) => {
-    const result = await mentorshipService.requestMentorship(mentor.id);
-    
-    toast({
-      title: result.success ? "Request Sent!" : "Request Failed",
-      description: result.message,
-      variant: result.success ? "default" : "destructive",
-    });
-    
-    if (result.success) {
-      speak(`Your mentorship request was sent to ${mentor.name}.`);
-      playSound('success');
-    } else {
-      speak("There was a problem sending your mentorship request.");
-      playSound('error');
-    }
+  const handleContactMentor = (mentor: Mentor) => {
+    requestMentorshipMutation.mutate(mentor.id);
+    speak(`Your mentorship request was sent to ${mentor.name}.`);
   };
   
   // Handle skill toggle
@@ -112,22 +136,9 @@ const PeerMentorship = () => {
   };
   
   // Handle event registration
-  const handleEventRegistration = async (event: MentorshipEvent) => {
-    const result = await mentorshipService.registerForEvent(event.id);
-    
-    toast({
-      title: result.success ? "Registered!" : "Registration Failed",
-      description: result.success ? `You've registered for "${event.title}"` : result.message,
-      variant: result.success ? "default" : "destructive",
-    });
-    
-    if (result.success) {
-      speak(`You've successfully registered for ${event.title}.`);
-      playSound('success');
-    } else {
-      speak("There was a problem with your registration.");
-      playSound('error');
-    }
+  const handleEventRegistration = (event: MentorshipEvent) => {
+    registerEventMutation.mutate(event.id);
+    speak(`You've successfully registered for ${event.title}.`);
   };
   
   // Format event date
@@ -167,6 +178,22 @@ const PeerMentorship = () => {
   const addUserSkill = (skill: string) => {
     if (!userSkills.includes(skill)) {
       setUserSkills([...userSkills, skill]);
+    }
+  };
+
+  // Add custom user skill
+  const handleAddCustomSkill = () => {
+    if (newSkill && !userSkills.includes(newSkill)) {
+      setUserSkills([...userSkills, newSkill]);
+      setNewSkill('');
+    }
+  };
+
+  // Add custom user goal
+  const handleAddCustomGoal = () => {
+    if (newGoal && !userGoals.includes(newGoal)) {
+      setUserGoals([...userGoals, newGoal]);
+      setNewGoal('');
     }
   };
 
@@ -239,55 +266,129 @@ const PeerMentorship = () => {
         
         <Card className="flex-1">
           <CardHeader>
-            <CardTitle>Your Profile</CardTitle>
+            <CardTitle className="flex items-center justify-between">
+              <span>Your Profile</span>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setIsEditingProfile(!isEditingProfile)}
+              >
+                {isEditingProfile ? <Save size={18} /> : <Edit size={18} />}
+                {isEditingProfile ? ' Save Mode' : ' Edit Mode'}
+              </Button>
+            </CardTitle>
             <CardDescription>Complete your profile to unlock all features</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-col items-center space-y-4 mb-4">
-              <Avatar className="w-24 h-24">
-                <AvatarFallback className="text-2xl bg-braille-blue text-white">
-                  {userName.split(' ').map(n => n[0]).join('')}
-                </AvatarFallback>
-              </Avatar>
-              <Input 
-                type="text" 
-                value={userName} 
-                onChange={(e) => setUserName(e.target.value)} 
-                placeholder="Your Name"
-                className="max-w-xs text-center"
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <h4 className="font-medium">My Skills:</h4>
-              <div className="flex flex-wrap gap-2">
-                {userSkills.map(skill => (
-                  <Badge key={skill} variant="outline" className="cursor-pointer" onClick={() => removeUserSkill(skill)}>
-                    {skill} ✕
-                  </Badge>
-                ))}
-                {userSkills.length === 0 && (
-                  <Badge variant="outline">Add skills...</Badge>
-                )}
+            {isProfileLoading ? (
+              <div className="flex justify-center py-10">
+                <Loader2 className="h-8 w-8 animate-spin text-braille-blue" />
               </div>
-            </div>
-            
-            <div className="space-y-2">
-              <h4 className="font-medium">Learning Goals:</h4>
-              <div className="flex flex-wrap gap-2">
-                {userGoals.map(goal => (
-                  <Badge key={goal} variant="outline" className="cursor-pointer" onClick={() => removeUserGoal(goal)}>
-                    {goal} ✕
-                  </Badge>
-                ))}
-                {userGoals.length === 0 && (
-                  <Badge variant="outline">Add goals...</Badge>
-                )}
-              </div>
-            </div>
+            ) : (
+              <>
+                <div className="flex flex-col items-center space-y-4 mb-4">
+                  <Avatar className="w-24 h-24">
+                    <AvatarFallback className="text-2xl bg-braille-blue text-white">
+                      {userName.split(' ').map(n => n[0]).join('')}
+                    </AvatarFallback>
+                  </Avatar>
+                  <Input 
+                    type="text" 
+                    value={userName} 
+                    onChange={(e) => setUserName(e.target.value)} 
+                    placeholder="Your Name"
+                    className="max-w-xs text-center"
+                    disabled={!isEditingProfile}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <h4 className="font-medium">My Skills:</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {userSkills.map(skill => (
+                      <Badge 
+                        key={skill} 
+                        variant="outline" 
+                        className={isEditingProfile ? "cursor-pointer" : ""}
+                        onClick={() => isEditingProfile && removeUserSkill(skill)}
+                      >
+                        {skill} {isEditingProfile && "✕"}
+                      </Badge>
+                    ))}
+                    {userSkills.length === 0 && (
+                      <Badge variant="outline">Add skills...</Badge>
+                    )}
+                  </div>
+                  
+                  {isEditingProfile && (
+                    <div className="flex mt-2 gap-2">
+                      <Input 
+                        placeholder="Add a new skill" 
+                        value={newSkill}
+                        onChange={(e) => setNewSkill(e.target.value)}
+                      />
+                      <Button 
+                        size="sm" 
+                        onClick={handleAddCustomSkill}
+                        disabled={!newSkill.trim()}
+                      >
+                        Add
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="space-y-2">
+                  <h4 className="font-medium">Learning Goals:</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {userGoals.map(goal => (
+                      <Badge 
+                        key={goal} 
+                        variant="outline" 
+                        className={isEditingProfile ? "cursor-pointer" : ""}
+                        onClick={() => isEditingProfile && removeUserGoal(goal)}
+                      >
+                        {goal} {isEditingProfile && "✕"}
+                      </Badge>
+                    ))}
+                    {userGoals.length === 0 && (
+                      <Badge variant="outline">Add goals...</Badge>
+                    )}
+                  </div>
+                  
+                  {isEditingProfile && (
+                    <div className="flex mt-2 gap-2">
+                      <Input 
+                        placeholder="Add a new goal" 
+                        value={newGoal}
+                        onChange={(e) => setNewGoal(e.target.value)}
+                      />
+                      <Button 
+                        size="sm" 
+                        onClick={handleAddCustomGoal}
+                        disabled={!newGoal.trim()}
+                      >
+                        Add
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </CardContent>
           <CardFooter>
-            <Button className="w-full" onClick={saveProfile}>Save Profile</Button>
+            <Button 
+              className="w-full" 
+              onClick={saveProfile}
+              disabled={updateProfileMutation.isPending}
+            >
+              {updateProfileMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : 'Save Profile'}
+            </Button>
           </CardFooter>
         </Card>
       </div>
@@ -390,7 +491,7 @@ const PeerMentorship = () => {
                       <Button 
                         size="sm"
                         className="flex items-center gap-1"
-                        disabled={!mentor.available}
+                        disabled={!mentor.available || requestMentorshipMutation.isPending}
                         onClick={() => handleContactMentor(mentor)}
                       >
                         <UserCheck size={16} />
@@ -573,7 +674,10 @@ const PeerMentorship = () => {
                         <Share size={16} className="mr-1" />
                         Share
                       </Button>
-                      <Button onClick={() => handleEventRegistration(event)}>
+                      <Button 
+                        onClick={() => handleEventRegistration(event)}
+                        disabled={registerEventMutation.isPending}
+                      >
                         Register
                       </Button>
                     </div>

@@ -27,6 +27,19 @@ export interface MentorshipEvent {
   location?: string;
 }
 
+export interface UserProfile {
+  name: string;
+  skills: string[];
+  goals: string[];
+  joinedEvents?: number[];
+  connectedMentors?: number[];
+}
+
+// Local storage keys
+const PROFILE_STORAGE_KEY = 'braillely-user-profile';
+const EVENTS_STORAGE_KEY = 'braillely-registered-events';
+const MENTORS_STORAGE_KEY = 'braillely-connected-mentors';
+
 // Mock data service - this would connect to a real backend API
 export const mentorshipService = {
   // Get all mentors
@@ -156,14 +169,56 @@ export const mentorshipService = {
     });
   },
 
+  // Get user profile
+  getUserProfile: async (): Promise<UserProfile> => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const storedProfile = localStorage.getItem(PROFILE_STORAGE_KEY);
+        const defaultProfile = {
+          name: 'Guest User',
+          skills: [],
+          goals: [],
+          joinedEvents: [],
+          connectedMentors: []
+        };
+        
+        if (storedProfile) {
+          try {
+            resolve(JSON.parse(storedProfile));
+          } catch (error) {
+            console.error('Error parsing profile:', error);
+            resolve(defaultProfile);
+          }
+        } else {
+          resolve(defaultProfile);
+        }
+      }, 300);
+    });
+  },
+
   // Request mentorship with a mentor
   requestMentorship: async (mentorId: number): Promise<{success: boolean, message: string}> => {
     return new Promise((resolve) => {
       setTimeout(() => {
-        resolve({
-          success: true,
-          message: `Your mentorship request has been sent successfully.`
-        });
+        try {
+          // Store in local storage
+          const mentors = JSON.parse(localStorage.getItem(MENTORS_STORAGE_KEY) || '[]');
+          if (!mentors.includes(mentorId)) {
+            mentors.push(mentorId);
+            localStorage.setItem(MENTORS_STORAGE_KEY, JSON.stringify(mentors));
+          }
+          
+          resolve({
+            success: true,
+            message: `Your mentorship request has been sent successfully.`
+          });
+        } catch (error) {
+          console.error('Error saving mentor:', error);
+          resolve({
+            success: false,
+            message: 'An error occurred while saving your mentorship request.'
+          });
+        }
       }, 800);
     });
   },
@@ -172,22 +227,48 @@ export const mentorshipService = {
   registerForEvent: async (eventId: number): Promise<{success: boolean, message: string}> => {
     return new Promise((resolve) => {
       setTimeout(() => {
-        resolve({
-          success: true,
-          message: `You've successfully registered for the event.`
-        });
+        try {
+          // Store in local storage
+          const events = JSON.parse(localStorage.getItem(EVENTS_STORAGE_KEY) || '[]');
+          if (!events.includes(eventId)) {
+            events.push(eventId);
+            localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(events));
+          }
+          
+          resolve({
+            success: true,
+            message: `You've successfully registered for the event.`
+          });
+        } catch (error) {
+          console.error('Error registering for event:', error);
+          resolve({
+            success: false,
+            message: 'An error occurred while registering for the event.'
+          });
+        }
       }, 600);
     });
   },
 
   // Update user profile
-  updateProfile: async (profileData: {name: string, skills: string[], goals: string[]}): Promise<{success: boolean, message: string}> => {
+  updateProfile: async (profileData: UserProfile): Promise<{success: boolean, message: string}> => {
     return new Promise((resolve) => {
       setTimeout(() => {
-        resolve({
-          success: true,
-          message: 'Your profile has been updated successfully.'
-        });
+        try {
+          // Save to local storage
+          localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profileData));
+          
+          resolve({
+            success: true,
+            message: 'Your profile has been updated successfully.'
+          });
+        } catch (error) {
+          console.error('Error updating profile:', error);
+          resolve({
+            success: false,
+            message: 'An error occurred while updating your profile.'
+          });
+        }
       }, 700);
     });
   }
@@ -231,6 +312,14 @@ export const useMentorshipService = () => {
         return [];
       }
     },
+    getUserProfile: async () => {
+      try {
+        return await mentorshipService.getUserProfile();
+      } catch (error: any) {
+        handleError(error);
+        return { name: 'Guest User', skills: [], goals: [] };
+      }
+    },
     requestMentorship: async (mentorId: number) => {
       try {
         return await mentorshipService.requestMentorship(mentorId);
@@ -247,7 +336,7 @@ export const useMentorshipService = () => {
         return { success: false, message: 'Failed to register for event.' };
       }
     },
-    updateProfile: async (profileData: {name: string, skills: string[], goals: string[]}) => {
+    updateProfile: async (profileData: UserProfile) => {
       try {
         return await mentorshipService.updateProfile(profileData);
       } catch (error: any) {

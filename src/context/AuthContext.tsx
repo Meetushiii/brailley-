@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -9,8 +9,20 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Use local storage for persistence across sessions
+const AUTH_STORAGE_KEY = 'braillely-auth-status';
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // Initialize state from localStorage if available
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    const savedAuth = localStorage.getItem(AUTH_STORAGE_KEY);
+    return savedAuth === 'true';
+  });
+
+  // Update localStorage whenever authentication state changes
+  useEffect(() => {
+    localStorage.setItem(AUTH_STORAGE_KEY, isAuthenticated.toString());
+  }, [isAuthenticated]);
 
   const login = () => {
     setIsAuthenticated(true);

@@ -1,4 +1,3 @@
-
 import { useToast } from "@/hooks/use-toast";
 
 // Mock API for now - would be replaced with actual backend calls
@@ -39,6 +38,26 @@ export interface UserProfile {
 const PROFILE_STORAGE_KEY = 'braillely-user-profile';
 const EVENTS_STORAGE_KEY = 'braillely-registered-events';
 const MENTORS_STORAGE_KEY = 'braillely-connected-mentors';
+
+// Helper function to safely get/parse localStorage data
+const getStorageItem = <T>(key: string, defaultValue: T): T => {
+  try {
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : defaultValue;
+  } catch (error) {
+    console.error(`Error retrieving ${key} from localStorage:`, error);
+    return defaultValue;
+  }
+};
+
+// Helper function to safely set localStorage data
+const setStorageItem = <T>(key: string, value: T): void => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.error(`Error saving ${key} to localStorage:`, error);
+  }
+};
 
 // Mock data service - this would connect to a real backend API
 export const mentorshipService = {
@@ -169,11 +188,10 @@ export const mentorshipService = {
     });
   },
 
-  // Get user profile
+  // Get user profile - now with improved localStorage handling
   getUserProfile: async (): Promise<UserProfile> => {
     return new Promise((resolve) => {
       setTimeout(() => {
-        const storedProfile = localStorage.getItem(PROFILE_STORAGE_KEY);
         const defaultProfile = {
           name: 'Guest User',
           skills: [],
@@ -182,30 +200,21 @@ export const mentorshipService = {
           connectedMentors: []
         };
         
-        if (storedProfile) {
-          try {
-            resolve(JSON.parse(storedProfile));
-          } catch (error) {
-            console.error('Error parsing profile:', error);
-            resolve(defaultProfile);
-          }
-        } else {
-          resolve(defaultProfile);
-        }
+        const storedProfile = getStorageItem<UserProfile>(PROFILE_STORAGE_KEY, defaultProfile);
+        resolve(storedProfile);
       }, 300);
     });
   },
 
-  // Request mentorship with a mentor
+  // Request mentorship with a mentor - improved storage
   requestMentorship: async (mentorId: number): Promise<{success: boolean, message: string}> => {
     return new Promise((resolve) => {
       setTimeout(() => {
         try {
-          // Store in local storage
-          const mentors = JSON.parse(localStorage.getItem(MENTORS_STORAGE_KEY) || '[]');
+          const mentors = getStorageItem<number[]>(MENTORS_STORAGE_KEY, []);
           if (!mentors.includes(mentorId)) {
             mentors.push(mentorId);
-            localStorage.setItem(MENTORS_STORAGE_KEY, JSON.stringify(mentors));
+            setStorageItem(MENTORS_STORAGE_KEY, mentors);
           }
           
           resolve({
@@ -223,16 +232,15 @@ export const mentorshipService = {
     });
   },
 
-  // Register for an event
+  // Register for an event - improved storage
   registerForEvent: async (eventId: number): Promise<{success: boolean, message: string}> => {
     return new Promise((resolve) => {
       setTimeout(() => {
         try {
-          // Store in local storage
-          const events = JSON.parse(localStorage.getItem(EVENTS_STORAGE_KEY) || '[]');
+          const events = getStorageItem<number[]>(EVENTS_STORAGE_KEY, []);
           if (!events.includes(eventId)) {
             events.push(eventId);
-            localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(events));
+            setStorageItem(EVENTS_STORAGE_KEY, events);
           }
           
           resolve({
@@ -250,13 +258,32 @@ export const mentorshipService = {
     });
   },
 
-  // Update user profile
+  // Update user profile - now with improved localStorage handling
   updateProfile: async (profileData: UserProfile): Promise<{success: boolean, message: string}> => {
     return new Promise((resolve) => {
       setTimeout(() => {
         try {
+          // Get existing profile to merge with any existing data not in the update
+          const existingProfile = getStorageItem<UserProfile>(PROFILE_STORAGE_KEY, {
+            name: 'Guest User',
+            skills: [],
+            goals: [],
+            joinedEvents: [],
+            connectedMentors: []
+          });
+          
+          // Merge the existing profile with the new data
+          const mergedProfile = {
+            ...existingProfile,
+            ...profileData,
+            // Ensure these arrays are preserved if they exist in the existing profile
+            joinedEvents: existingProfile.joinedEvents || [],
+            connectedMentors: existingProfile.connectedMentors || []
+          };
+          
           // Save to local storage
-          localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profileData));
+          setStorageItem(PROFILE_STORAGE_KEY, mergedProfile);
+          console.log('Profile saved successfully:', mergedProfile);
           
           resolve({
             success: true,

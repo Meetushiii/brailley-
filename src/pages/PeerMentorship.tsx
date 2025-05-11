@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -53,22 +52,32 @@ const PeerMentorship = () => {
     queryFn: () => mentorshipService.getUserProfile(),
   });
 
-  // Update profile mutation
+  // Update profile mutation with improved error handling
   const updateProfileMutation = useMutation({
     mutationFn: (profileData: UserProfile) => mentorshipService.updateProfile(profileData),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['userProfile'] });
-      toast({
-        title: "Profile Updated",
-        description: "Your profile has been saved successfully.",
-      });
-      playSound('success');
-      speak("Your profile has been updated successfully.");
+    onSuccess: (data) => {
+      if (data.success) {
+        queryClient.invalidateQueries({ queryKey: ['userProfile'] });
+        toast({
+          title: "Profile Saved",
+          description: "Your profile has been permanently saved.",
+        });
+        playSound('success');
+        speak("Your profile has been saved and will be available when you return.");
+      } else {
+        toast({
+          title: "Update Warning",
+          description: data.message,
+          variant: "destructive"
+        });
+        playSound('error');
+      }
     },
-    onError: () => {
+    onError: (error) => {
+      console.error("Profile update error:", error);
       toast({
         title: "Update Failed",
-        description: "Failed to save your profile.",
+        description: "Failed to save your profile. Please try again later.",
         variant: "destructive"
       });
       playSound('error');
@@ -99,7 +108,7 @@ const PeerMentorship = () => {
     }
   });
   
-  // Load user profile from query
+  // Load user profile from query with better error handling
   useEffect(() => {
     if (userProfile) {
       setUserName(userProfile.name || 'Guest User');
@@ -108,14 +117,24 @@ const PeerMentorship = () => {
     }
   }, [userProfile]);
   
-  // Save profile
-  const saveProfile = async () => {
+  // Save profile with immediate feedback
+  const saveProfile = () => {
+    if (userName.trim() === '') {
+      toast({
+        title: "Cannot Save",
+        description: "Please enter your name before saving.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     const profileData = {
       name: userName,
       skills: userSkills,
       goals: userGoals
     };
     
+    console.log("Saving profile data:", profileData);
     updateProfileMutation.mutate(profileData);
     setIsEditingProfile(false);
   };
@@ -213,6 +232,15 @@ const PeerMentorship = () => {
   const removeUserGoal = (goal: string) => {
     setUserGoals(userGoals.filter(g => g !== goal));
   };
+  
+  // Autosave when editing is turned off
+  useEffect(() => {
+    if (!isEditingProfile && userName.trim() !== '' && (userProfile?.name !== userName || 
+        JSON.stringify(userProfile?.skills) !== JSON.stringify(userSkills) || 
+        JSON.stringify(userProfile?.goals) !== JSON.stringify(userGoals))) {
+      saveProfile();
+    }
+  }, [isEditingProfile]);
   
   return (
     <div className="container mx-auto px-4 py-8">
